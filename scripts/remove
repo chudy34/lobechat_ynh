@@ -8,7 +8,7 @@ ynh_remove_systemd_config
 
 ynh_script_progression --message="Removing Docker containers and volumes..." --weight=5
 cd "$install_dir" 2>/dev/null && \
-    docker compose --project-name "$COMPOSE_PROJECT" down --volumes --remove-orphans 2>/dev/null || true
+    docker-compose --project-name "$COMPOSE_PROJECT" down --volumes --remove-orphans 2>/dev/null || true
 docker network rm "lobehub_${app}_network" 2>/dev/null || true
 
 ynh_script_progression --message="Removing NGINX configuration..." --weight=1

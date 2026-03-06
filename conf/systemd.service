@@ -13,18 +13,18 @@ TimeoutStopSec=60
 
 WorkingDirectory=__INSTALL_DIR__
 
-ExecStart=/usr/bin/docker compose \
+ExecStart=/usr/bin/docker-compose \
     --project-name lobehub___APP__ \
-    --env-file __INSTALL_DIR__/.env \
+    --file __INSTALL_DIR__/docker-compose.yml \
     up \
     --remove-orphans
 
-ExecStop=/usr/bin/docker compose \
+ExecStop=/usr/bin/docker-compose \
     --project-name lobehub___APP__ \
     down \
     --timeout 30
 
-ExecStopPost=-/usr/bin/docker compose \
+ExecStopPost=-/usr/bin/docker-compose \
     --project-name lobehub___APP__ \
     down \
     --timeout 10

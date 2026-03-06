@@ -20,7 +20,7 @@ chown -R "$app:$app" "$data_dir"
 
 ynh_script_progression --message="Pulling Docker images..." --weight=20
 cd "$install_dir"
-docker compose --project-name "$COMPOSE_PROJECT" pull
+docker-compose --project-name "$COMPOSE_PROJECT" pull
 
 ynh_script_progression --message="Starting LobeHub stack..." --weight=10
 systemctl enable "$app" --quiet

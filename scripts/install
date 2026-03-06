@@ -22,9 +22,10 @@ if ! command -v docker &>/dev/null; then
     ynh_exec_warn_less apt-get install -y docker.io
 fi
 
-# Ensure docker compose v2 plugin is available
-if ! docker compose version &>/dev/null; then
-    ynh_exec_warn_less apt-get install -y docker-compose-plugin
+# docker-compose (v1 from Debian repos) is installed via manifest apt resources
+# Verify it's available
+if ! command -v docker-compose &>/dev/null; then
+    ynh_exec_warn_less apt-get install -y docker-compose
 fi
 
 systemctl enable docker --quiet
@@ -204,7 +205,7 @@ chown "$app:$app" "$install_dir/bucket.config.json"
 ynh_script_progression --message="Pulling Docker images — lobehub/lobehub, paradedb, rustfs, redis, searxng (may take several minutes)..." --weight=40
 
 cd "$install_dir"
-docker compose --project-name "$COMPOSE_PROJECT" pull
+docker-compose --project-name "$COMPOSE_PROJECT" pull
 
 #=================================================
 # CONFIGURE SYSTEMD SERVICE

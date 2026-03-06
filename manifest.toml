@@ -71,4 +71,4 @@ rustfs_api.default = 9000
 rustfs_console.default = 9001
 
 [resources.apt]
-packages = ["docker.io", "docker-compose-plugin", "curl", "openssl"]
+packages = ["docker.io", "docker-compose", "curl", "openssl"]
