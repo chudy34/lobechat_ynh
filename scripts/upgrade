@@ -1,0 +1,29 @@
+#!/bin/bash
+source _common.sh
+source /usr/share/yunohost/helpers
+
+ynh_script_progression --message="Pulling latest LobeHub images..." --weight=30
+cd "$install_dir"
+docker compose --project-name "$COMPOSE_PROJECT" pull
+
+ynh_script_progression --message="Stopping current stack..." --weight=3
+ynh_systemd_action --service_name="$app" --action="stop"
+
+ynh_script_progression --message="Updating configuration..." --weight=2
+# Re-render docker-compose.yml from template with current settings
+sed \
+    -e "s|__APP__|${app}|g" \
+    -e "s|__INSTALL_DIR__|${install_dir}|g" \
+    -e "s|__DATA_DIR__|${data_dir}|g" \
+    -e "s|__PORT__|${port}|g" \
+    -e "s|__PORT_RUSTFS_API__|${port_rustfs_api}|g" \
+    -e "s|__PORT_RUSTFS_CONSOLE__|${port_rustfs_console}|g" \
+    ../conf/docker-compose.yml > "$install_dir/docker-compose.yml"
+
+ynh_add_systemd_config
+ynh_add_nginx_config
+
+ynh_script_progression --message="Starting updated LobeHub stack..." --weight=10
+ynh_systemd_action --service_name="$app" --action="start" --log_path=systemd --timeout=300
+
+ynh_script_progression --message="LobeHub upgrade completed!" --last

@@ -1,0 +1,254 @@
+#!/bin/bash
+
+#=================================================
+# IMPORT GENERIC HELPERS
+#=================================================
+source _common.sh
+source /usr/share/yunohost/helpers
+
+#=================================================
+# RETRIEVE INSTALL ARGS
+#=================================================
+admin_email="$YNH_APP_ARG_ADMIN_EMAIL"
+admin_password="$YNH_APP_ARG_ADMIN_PASSWORD"
+
+#=================================================
+# CHECK & START DOCKER
+#=================================================
+ynh_script_progression --message="Checking Docker installation..." --weight=2
+
+if ! command -v docker &>/dev/null; then
+    ynh_script_progression --message="Installing Docker..." --weight=10
+    ynh_exec_warn_less apt-get install -y docker.io
+fi
+
+# Ensure docker compose v2 plugin is available
+if ! docker compose version &>/dev/null; then
+    ynh_exec_warn_less apt-get install -y docker-compose-plugin
+fi
+
+systemctl enable docker --quiet
+systemctl start docker
+
+#=================================================
+# GENERATE ALL SECRETS
+#=================================================
+ynh_script_progression --message="Generating cryptographic secrets..." --weight=1
+
+postgres_password=$(generate_password)
+rustfs_access_key="admin"
+rustfs_secret_key=$(generate_password)
+key_vaults_secret=$(generate_secret)
+auth_secret=$(generate_secret)
+
+# Persist secrets as YunoHost app settings
+ynh_app_setting_set --app="$app" --key=postgres_password   --value="$postgres_password"
+ynh_app_setting_set --app="$app" --key=rustfs_access_key   --value="$rustfs_access_key"
+ynh_app_setting_set --app="$app" --key=rustfs_secret_key   --value="$rustfs_secret_key"
+ynh_app_setting_set --app="$app" --key=key_vaults_secret   --value="$key_vaults_secret"
+ynh_app_setting_set --app="$app" --key=auth_secret         --value="$auth_secret"
+ynh_app_setting_set --app="$app" --key=admin_email         --value="$admin_email"
+
+#=================================================
+# PREPARE DIRECTORIES
+#=================================================
+ynh_script_progression --message="Creating data directories..." --weight=1
+
+mkdir -p "$data_dir/postgres"
+mkdir -p "$data_dir/rustfs"
+mkdir -p "$data_dir/redis"
+mkdir -p "$data_dir/searxng"
+
+chown -R "$app:$app" "$install_dir"
+chown -R "$app:$app" "$data_dir"
+
+#=================================================
+# GENERATE SEARXNG SETTINGS
+#=================================================
+ynh_script_progression --message="Configuring SearXNG..." --weight=1
+
+searxng_secret=$(generate_secret)
+ynh_app_setting_set --app="$app" --key=searxng_secret --value="$searxng_secret"
+
+cat > "$data_dir/searxng/settings.yml" << SEARXNG_EOF
+use_default_settings: true
+
+server:
+  secret_key: "${searxng_secret}"
+  limiter: false
+  image_proxy: true
+  port: 8080
+  bind_address: "0.0.0.0"
+
+ui:
+  static_use_hash: true
+
+search:
+  safe_search: 0
+  autocomplete: ""
+  default_lang: ""
+  formats:
+    - html
+    - json
+
+engines:
+  - name: google
+    engine: google
+    shortcut: g
+  - name: duckduckgo
+    engine: duckduckgo
+    shortcut: ddg
+  - name: bing
+    engine: bing
+    shortcut: b
+  - name: wikipedia
+    engine: wikipedia
+    shortcut: wp
+    base_url: "https://en.wikipedia.org/"
+
+outgoing:
+  request_timeout: 15.0
+  max_request_timeout: 30.0
+SEARXNG_EOF
+
+#=================================================
+# GENERATE RUSTFS BUCKET POLICY
+#=================================================
+ynh_script_progression --message="Configuring RustFS bucket policy..." --weight=1
+
+cat > "$install_dir/bucket.config.json" << 'BUCKET_EOF'
+{
+  "Version": "2012-10-17",
+  "Statement": [
+    {
+      "Effect": "Allow",
+      "Principal": { "AWS": ["*"] },
+      "Action": ["s3:GetObject"],
+      "Resource": ["arn:aws:s3:::lobe/*"]
+    }
+  ]
+}
+BUCKET_EOF
+
+#=================================================
+# BUILD APP_URL
+#=================================================
+if [ "$path" = "/" ]; then
+    APP_URL="https://${domain}"
+else
+    APP_URL="https://${domain}${path}"
+fi
+
+#=================================================
+# GENERATE .env FILE
+#=================================================
+ynh_script_progression --message="Generating environment configuration..." --weight=1
+
+cat > "$install_dir/.env" << ENV_EOF
+# ============================================
+# LobeHub v2.1.38 — YunoHost deployment
+# Generated automatically — do not edit manually
+# ============================================
+
+# Application
+APP_URL=${APP_URL}
+LOBE_PORT=${port}
+RUSTFS_PORT=${port_rustfs_api}
+
+# PostgreSQL (ParadeDB = PostgreSQL + pgvector + pg_search)
+POSTGRES_PASSWORD=${postgres_password}
+LOBE_DB_NAME=lobehub
+
+# Auth (NextAuth built-in — no separate auth container)
+KEY_VAULTS_SECRET=${key_vaults_secret}
+AUTH_SECRET=${auth_secret}
+
+# RustFS S3 storage
+RUSTFS_ACCESS_KEY=${rustfs_access_key}
+RUSTFS_SECRET_KEY=${rustfs_secret_key}
+RUSTFS_LOBE_BUCKET=lobe
+S3_ENDPOINT=http://network-service:9000
+S3_PUBLIC_DOMAIN=${APP_URL}/s3
+
+# Initial admin credentials (used by LobeHub first-run setup)
+AUTH_ADMIN_EMAIL=${admin_email}
+AUTH_ADMIN_PASSWORD=${admin_password}
+
+# Optional proxy (uncomment if needed)
+# HTTP_PROXY=http://localhost:7890
+# HTTPS_PROXY=http://localhost:7890
+ENV_EOF
+
+#=================================================
+# DEPLOY DOCKER-COMPOSE FILE
+#=================================================
+ynh_script_progression --message="Deploying Docker Compose configuration..." --weight=1
+
+# Substitute placeholders in the template and write final compose file
+sed \
+    -e "s|__APP__|${app}|g" \
+    -e "s|__INSTALL_DIR__|${install_dir}|g" \
+    -e "s|__DATA_DIR__|${data_dir}|g" \
+    -e "s|__PORT__|${port}|g" \
+    -e "s|__PORT_RUSTFS_API__|${port_rustfs_api}|g" \
+    -e "s|__PORT_RUSTFS_CONSOLE__|${port_rustfs_console}|g" \
+    ../conf/docker-compose.yml > "$install_dir/docker-compose.yml"
+
+chown "$app:$app" "$install_dir/docker-compose.yml"
+chown "$app:$app" "$install_dir/.env"
+chown "$app:$app" "$install_dir/bucket.config.json"
+
+#=================================================
+# PULL DOCKER IMAGES
+#=================================================
+ynh_script_progression --message="Pulling Docker images — lobehub/lobehub, paradedb, rustfs, redis, searxng (may take several minutes)..." --weight=40
+
+cd "$install_dir"
+docker compose --project-name "$COMPOSE_PROJECT" pull
+
+#=================================================
+# CONFIGURE SYSTEMD SERVICE
+#=================================================
+ynh_script_progression --message="Configuring systemd service..." --weight=1
+
+ynh_add_systemd_config
+
+#=================================================
+# CONFIGURE NGINX
+#=================================================
+ynh_script_progression --message="Configuring NGINX reverse proxy..." --weight=2
+
+ynh_add_nginx_config
+
+#=================================================
+# START THE STACK
+#=================================================
+ynh_script_progression --message="Starting LobeHub stack (this may take up to 2 minutes)..." --weight=10
+
+ynh_systemd_action --service_name="$app" --action="start" --log_path=systemd --timeout=180
+
+#=================================================
+# WAIT FOR HEALTH
+#=================================================
+ynh_script_progression --message="Waiting for LobeHub to be ready..." --weight=5
+
+timeout=90
+while [ $timeout -gt 0 ]; do
+    if curl -sf "http://127.0.0.1:${port}/api/health" &>/dev/null; then
+        break
+    fi
+    sleep 3
+    timeout=$((timeout - 3))
+done
+
+if [ $timeout -le 0 ]; then
+    ynh_script_progression --message="Warning: LobeHub health check timed out, but service may still be starting." --weight=1
+fi
+
+#=================================================
+# END
+#=================================================
+ynh_script_progression --message="LobeHub v2.1.38 installed successfully!" --last
+ynh_script_progression --message="URL: ${APP_URL}" --last
+ynh_script_progression --message="Login: ${admin_email}" --last
+ynh_script_progression --message="RustFS Console: https://${domain}:${port_rustfs_console}" --last

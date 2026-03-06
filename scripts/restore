@@ -1,0 +1,31 @@
+#!/bin/bash
+source _common.sh
+source /usr/share/yunohost/helpers
+
+ynh_script_progression --message="Restoring NGINX configuration..." --weight=1
+ynh_restore_file --origin_path="/etc/nginx/conf.d/$domain.d/$app.conf"
+
+ynh_script_progression --message="Restoring systemd service..." --weight=1
+ynh_restore_file --origin_path="/etc/systemd/system/$app.service"
+systemctl daemon-reload --quiet
+
+ynh_script_progression --message="Restoring install directory..." --weight=2
+ynh_restore_file --origin_path="$install_dir"
+
+ynh_script_progression --message="Restoring data directory..." --weight=15
+ynh_restore_file --origin_path="$data_dir"
+
+chown -R "$app:$app" "$install_dir"
+chown -R "$app:$app" "$data_dir"
+
+ynh_script_progression --message="Pulling Docker images..." --weight=20
+cd "$install_dir"
+docker compose --project-name "$COMPOSE_PROJECT" pull
+
+ynh_script_progression --message="Starting LobeHub stack..." --weight=10
+systemctl enable "$app" --quiet
+ynh_systemd_action --service_name="$app" --action="start" --log_path=systemd --timeout=300
+
+ynh_systemd_action --service_name=nginx --action=reload
+
+ynh_script_progression --message="Restore completed!" --last
