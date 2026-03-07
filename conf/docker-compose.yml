@@ -173,7 +173,6 @@ services:
 
       # App
       APP_URL:      ${APP_URL}
-      NEXTAUTH_URL: ${APP_URL}/api/auth
       NODE_ENV:     production
 
       # Vision / LLM

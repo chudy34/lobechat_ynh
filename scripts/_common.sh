@@ -7,7 +7,7 @@ COMPOSE_PROJECT="lobehub_${app}"
 DOCKER_COMPOSE="docker compose"
 
 gen_password() { openssl rand -base64 24 | tr -dc 'A-Za-z0-9' | head -c 28; }
-gen_secret()   { openssl rand -hex 32; }
+gen_secret()   { openssl rand -hex 16; }
 
 install_docker_ce() {
     # Skip if docker compose v2 is already available
