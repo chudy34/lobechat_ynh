@@ -1,31 +1,37 @@
 #!/bin/bash
+
 source _common.sh
 source /usr/share/yunohost/helpers
 
-ynh_script_progression --message="Restoring NGINX configuration..." --weight=1
-ynh_restore_file --origin_path="/etc/nginx/conf.d/$domain.d/$app.conf"
+#=================================================
+# ENSURE DOCKER CE
+#=================================================
+ynh_script_progression --message="Checking Docker CE..." --weight=10
+install_docker_ce
 
-ynh_script_progression --message="Restoring systemd service..." --weight=1
-ynh_restore_file --origin_path="/etc/systemd/system/$app.service"
-systemctl daemon-reload --quiet
-
-ynh_script_progression --message="Restoring install directory..." --weight=2
+#=================================================
+# RESTORE FILES
+#=================================================
+ynh_script_progression --message="Restoring install dir..." --weight=5
 ynh_restore_file --origin_path="$install_dir"
 
-ynh_script_progression --message="Restoring data directory..." --weight=15
+ynh_script_progression --message="Restoring data..." --weight=20
 ynh_restore_file --origin_path="$data_dir"
 
-chown -R "$app:$app" "$install_dir"
-chown -R "$app:$app" "$data_dir"
+#=================================================
+# PULL IMAGES & START
+#=================================================
+ynh_script_progression --message="Pulling Docker images..." --weight=40
 
-ynh_script_progression --message="Pulling Docker images..." --weight=20
 cd "$install_dir"
-docker-compose --project-name "$COMPOSE_PROJECT" pull
+docker compose --project-name "$app" pull
 
-ynh_script_progression --message="Starting LobeHub stack..." --weight=10
-systemctl enable "$app" --quiet
+ynh_script_progression --message="Restoring systemd and nginx..." --weight=2
+ynh_restore_file --origin_path="/etc/systemd/system/$app.service"
+systemctl daemon-reload
+ynh_restore_file --origin_path="/etc/nginx/conf.d/$domain.d/$app.conf"
+
+ynh_script_progression --message="Starting restored LobeHub..." --weight=10
 ynh_systemd_action --service_name="$app" --action="start" --log_path=systemd --timeout=300
 
-ynh_systemd_action --service_name=nginx --action=reload
-
-ynh_script_progression --message="Restore completed!" --last
+ynh_script_progression --message="Restore complete!" --last

@@ -1,20 +1,23 @@
 #!/bin/bash
+
 source _common.sh
 source /usr/share/yunohost/helpers
 
 ynh_script_progression --message="Stopping stack for consistent backup..." --weight=2
-ynh_systemd_action --service_name="$app" --action="stop"
+ynh_systemd_action --service_name="$app" --action="stop" --log_path=systemd --timeout=60
 
-ynh_script_progression --message="Backing up configuration..." --weight=2
+#=================================================
+# BACKUP FILES
+#=================================================
+ynh_script_progression --message="Backing up install dir..." --weight=5
 ynh_backup --src_path="$install_dir"
 
-ynh_script_progression --message="Backing up data (postgres, rustfs, redis, searxng)..." --weight=10
+ynh_script_progression --message="Backing up data..." --weight=20
 ynh_backup --src_path="$data_dir"
 
-ynh_backup --src_path="/etc/nginx/conf.d/$domain.d/$app.conf"
-ynh_backup --src_path="/etc/systemd/system/$app.service"
+#=================================================
+# RESTART AFTER BACKUP
+#=================================================
+ynh_systemd_action --service_name="$app" --action="start" --log_path=systemd --timeout=300
 
-ynh_script_progression --message="Restarting stack after backup..." --weight=5
-ynh_systemd_action --service_name="$app" --action="start" --timeout=300
-
-ynh_script_progression --message="Backup completed!" --last
+ynh_script_progression --message="Backup complete." --last

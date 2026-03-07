@@ -1,36 +1,38 @@
 [Unit]
-Description=LobeHub v2 Full Stack (ParadeDB + RustFS + Redis + SearXNG + LobeHub)
-After=docker.service network-online.target
+Description=LobeHub AI platform (__APP__)
 Requires=docker.service
+After=docker.service network-online.target
 Wants=network-online.target
 
 [Service]
 Type=simple
-Restart=always
-RestartSec=15
+User=root
+WorkingDirectory=__INSTALL_DIR__
+
+ExecStartPre=docker compose --project-name __APP__ --file __INSTALL_DIR__/docker-compose.yml pull --quiet
+ExecStart=docker compose \
+    --project-name __APP__ \
+    --file __INSTALL_DIR__/docker-compose.yml \
+    up --remove-orphans
+
+ExecStop=docker compose \
+    --project-name __APP__ \
+    --file __INSTALL_DIR__/docker-compose.yml \
+    down --timeout 30
+
+ExecReload=docker compose \
+    --project-name __APP__ \
+    --file __INSTALL_DIR__/docker-compose.yml \
+    up -d --remove-orphans
+
+Restart=on-failure
+RestartSec=10s
 TimeoutStartSec=300
 TimeoutStopSec=60
 
-WorkingDirectory=__INSTALL_DIR__
-
-ExecStart=/usr/bin/docker-compose \
-    --project-name lobehub___APP__ \
-    --file __INSTALL_DIR__/docker-compose.yml \
-    up \
-    --remove-orphans
-
-ExecStop=/usr/bin/docker-compose \
-    --project-name lobehub___APP__ \
-    down \
-    --timeout 30
-
-ExecStopPost=-/usr/bin/docker-compose \
-    --project-name lobehub___APP__ \
-    down \
-    --timeout 10
-
 StandardOutput=journal
 StandardError=journal
+SyslogIdentifier=__APP__
 
 [Install]
 WantedBy=multi-user.target

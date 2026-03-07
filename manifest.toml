@@ -4,71 +4,73 @@ packaging_format = 2
 
 id = "lobehub"
 name = "LobeHub"
-description.en = "Full-stack AI agent workspace: 50+ LLM providers, Knowledge Base (RAG), MCP plugins, multi-agent, file storage, web search"
-description.fr = "Espace de travail IA complet : 50+ fournisseurs LLM, Knowledge Base (RAG), plugins MCP, multi-agents, stockage fichiers, recherche web"
+description.en = "Self-hosted AI workspace: 50+ LLM providers, Knowledge Base (RAG), MCP plugins, multi-agent, web search"
+description.fr = "Espace de travail IA auto-hébergé : 50+ fournisseurs LLM, Knowledge Base, plugins MCP, multi-agents"
 
 version = "2.1.38~ynh1"
 
 maintainers = []
 
 [upstream]
-license = "MIT"
-website = "https://lobehub.com"
-admindoc = "https://lobehub.com/docs/self-hosting/platform/docker-compose"
-userdoc = "https://lobehub.com/docs"
-code = "https://github.com/lobehub/lobehub"
+license    = "MIT"
+website    = "https://lobehub.com"
+admindoc   = "https://lobehub.com/docs/self-hosting/platform/docker-compose"
+userdoc    = "https://lobehub.com/docs"
+code       = "https://github.com/lobehub/lobehub"
 
 [integration]
-yunohost = ">= 11.2"
+yunohost      = ">= 11.2"
 architectures = ["amd64", "arm64"]
 multi_instance = false
 ldap = false
-sso = false
-disk = "3000M"
-ram.build = "512M"
-ram.runtime = "1500M"
+sso  = false
+disk        = "4000M"
+ram.build   = "512M"
+ram.runtime = "2000M"
 
 [install]
 
-[install.domain]
-type = "domain"
+  [install.domain]
+  type = "domain"
 
-[install.path]
-type = "path"
-default = "/"
+  [install.path]
+  type    = "path"
+  default = "/"
 
-[install.init_main_permission]
-type = "group"
-default = "visitors"
+  [install.init_main_permission]
+  type    = "group"
+  default = "visitors"
 
-[install.admin_email]
-ask.en = "Admin email address (for first login)"
-ask.fr = "Adresse email administrateur (pour la première connexion)"
-type = "email"
+  [install.admin_email]
+  ask.en = "Admin e-mail (first login)"
+  ask.fr = "E-mail administrateur (première connexion)"
+  type   = "email"
 
-[install.admin_password]
-ask.en = "Admin password"
-ask.fr = "Mot de passe administrateur"
-type = "password"
+  [install.admin_password]
+  ask.en = "Admin password"
+  ask.fr = "Mot de passe administrateur"
+  type   = "password"
 
 [resources]
 
-[resources.system_user]
+  [resources.system_user]
 
-[resources.install_dir]
-# /var/www/lobehub — docker-compose.yml, .env, config files
+  [resources.install_dir]
+  # /var/www/lobehub  — compose file, .env, configs
 
-[resources.data_dir]
-# /home/yunohost.app/lobehub — postgres data, rustfs data, redis data, searxng config
+  [resources.data_dir]
+  # /home/yunohost.app/lobehub  — postgres, rustfs, redis, searxng data
 
-[resources.permissions]
-main.url = "/"
-main.auth_header = false
+  [resources.permissions]
+  main.url         = "/"
+  main.auth_header = false
 
-[resources.ports]
-main.default = 3210
-rustfs_api.default = 9000
-rustfs_console.default = 9001
+  [resources.ports]
+  main.default           = 3210
+  rustfs_api.default     = 9000
+  rustfs_console.default = 9001
 
-[resources.apt]
-packages = ["docker.io", "docker-compose", "curl", "openssl"]
+  [resources.apt]
+  # Only base tools — Docker CE is installed manually in install script
+  # because docker.io (Debian) ships docker compose v1, we need v2
+  packages = ["curl", "openssl", "ca-certificates", "gnupg", "lsb-release"]

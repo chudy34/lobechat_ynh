@@ -1,17 +1,20 @@
 #!/bin/bash
+
 source _common.sh
 source /usr/share/yunohost/helpers
 
-ynh_script_progression --message="Stopping LobeHub stack..." --weight=3
-ynh_systemd_action --service_name="$app" --action="stop" || true
-ynh_remove_systemd_config
+#=================================================
+# STOP AND REMOVE CONTAINERS
+#=================================================
+ynh_script_progression --message="Stopping and removing Docker containers..." --weight=5
 
-ynh_script_progression --message="Removing Docker containers and volumes..." --weight=5
-cd "$install_dir" 2>/dev/null && \
-    docker-compose --project-name "$COMPOSE_PROJECT" down --volumes --remove-orphans 2>/dev/null || true
-docker network rm "lobehub_${app}_network" 2>/dev/null || true
+if [ -f "$install_dir/docker-compose.yml" ]; then
+    cd "$install_dir"
+    docker compose --project-name "$app" down --remove-orphans --timeout 30 || true
 
-ynh_script_progression --message="Removing NGINX configuration..." --weight=1
-ynh_remove_nginx_config
+    # Remove images pulled for this app
+    docker compose --project-name "$app" --file "$install_dir/docker-compose.yml" \
+        images -q 2>/dev/null | xargs -r docker rmi --force 2>/dev/null || true
+fi
 
 ynh_script_progression --message="LobeHub removed." --last

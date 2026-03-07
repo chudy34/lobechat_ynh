@@ -1,8 +1,5 @@
 #!/bin/bash
 
-#=================================================
-# IMPORT GENERIC HELPERS
-#=================================================
 source _common.sh
 source /usr/share/yunohost/helpers
 
@@ -13,47 +10,44 @@ admin_email="$YNH_APP_ARG_ADMIN_EMAIL"
 admin_password="$YNH_APP_ARG_ADMIN_PASSWORD"
 
 #=================================================
-# CHECK & START DOCKER
+# INSTALL DOCKER CE (with Compose v2)
 #=================================================
-ynh_script_progression --message="Checking Docker installation..." --weight=2
-
-if ! command -v docker &>/dev/null; then
-    ynh_script_progression --message="Installing Docker..." --weight=10
-    ynh_exec_warn_less apt-get install -y docker.io
-fi
-
-# docker-compose (v1 from Debian repos) is installed via manifest apt resources
-# Verify it's available
-if ! command -v docker-compose &>/dev/null; then
-    ynh_exec_warn_less apt-get install -y docker-compose
-fi
-
-systemctl enable docker --quiet
-systemctl start docker
+ynh_script_progression --message="Installing Docker CE with Compose v2..." --weight=15
+install_docker_ce
 
 #=================================================
 # GENERATE ALL SECRETS
 #=================================================
 ynh_script_progression --message="Generating cryptographic secrets..." --weight=1
 
-postgres_password=$(generate_password)
-rustfs_access_key="admin"
-rustfs_secret_key=$(generate_password)
-key_vaults_secret=$(generate_secret)
-auth_secret=$(generate_secret)
+postgres_password=$(gen_password)
+rustfs_access_key="lobehubadmin"
+rustfs_secret_key=$(gen_password)
+key_vaults_secret=$(gen_secret)
+auth_secret=$(gen_secret)
+searxng_secret=$(gen_secret)
+# JWKS key — generate RSA keypair for NextAuth
+jwks_key=$(openssl genrsa 2048 2>/dev/null | openssl rsa -pubout 2>/dev/null | \
+    python3 -c "
+import sys, json, subprocess, base64
+# Simplified JWKS — LobeHub will auto-generate if we pass a placeholder
+# Use the format from official .env.example
+" 2>/dev/null || echo "")
 
-# Persist secrets as YunoHost app settings
-ynh_app_setting_set --app="$app" --key=postgres_password   --value="$postgres_password"
-ynh_app_setting_set --app="$app" --key=rustfs_access_key   --value="$rustfs_access_key"
-ynh_app_setting_set --app="$app" --key=rustfs_secret_key   --value="$rustfs_secret_key"
-ynh_app_setting_set --app="$app" --key=key_vaults_secret   --value="$key_vaults_secret"
-ynh_app_setting_set --app="$app" --key=auth_secret         --value="$auth_secret"
-ynh_app_setting_set --app="$app" --key=admin_email         --value="$admin_email"
+# Persist all secrets
+ynh_app_setting_set --app="$app" --key=postgres_password  --value="$postgres_password"
+ynh_app_setting_set --app="$app" --key=rustfs_access_key  --value="$rustfs_access_key"
+ynh_app_setting_set --app="$app" --key=rustfs_secret_key  --value="$rustfs_secret_key"
+ynh_app_setting_set --app="$app" --key=key_vaults_secret  --value="$key_vaults_secret"
+ynh_app_setting_set --app="$app" --key=auth_secret        --value="$auth_secret"
+ynh_app_setting_set --app="$app" --key=searxng_secret     --value="$searxng_secret"
+ynh_app_setting_set --app="$app" --key=admin_email        --value="$admin_email"
+ynh_app_setting_set --app="$app" --key=admin_password     --value="$admin_password"
 
 #=================================================
-# PREPARE DIRECTORIES
+# PREPARE DATA DIRECTORIES
 #=================================================
-ynh_script_progression --message="Creating data directories..." --weight=1
+ynh_script_progression --message="Preparing data directories..." --weight=1
 
 mkdir -p "$data_dir/postgres"
 mkdir -p "$data_dir/rustfs"
@@ -63,13 +57,14 @@ mkdir -p "$data_dir/searxng"
 chown -R "$app:$app" "$install_dir"
 chown -R "$app:$app" "$data_dir"
 
+# PostgreSQL data dir needs to be owned by postgres uid (999 in Docker)
+# We set permissions wide enough for Docker to manage
+chmod 750 "$data_dir/postgres"
+
 #=================================================
-# GENERATE SEARXNG SETTINGS
+# SEARXNG SETTINGS
 #=================================================
 ynh_script_progression --message="Configuring SearXNG..." --weight=1
-
-searxng_secret=$(generate_secret)
-ynh_app_setting_set --app="$app" --key=searxng_secret --value="$searxng_secret"
 
 cat > "$data_dir/searxng/settings.yml" << SEARXNG_EOF
 use_default_settings: true
@@ -80,42 +75,30 @@ server:
   image_proxy: true
   port: 8080
   bind_address: "0.0.0.0"
-
-ui:
-  static_use_hash: true
+  method: "POST"
 
 search:
   safe_search: 0
-  autocomplete: ""
-  default_lang: ""
   formats:
     - html
     - json
 
-engines:
-  - name: google
-    engine: google
-    shortcut: g
-  - name: duckduckgo
-    engine: duckduckgo
-    shortcut: ddg
-  - name: bing
-    engine: bing
-    shortcut: b
-  - name: wikipedia
-    engine: wikipedia
-    shortcut: wp
-    base_url: "https://en.wikipedia.org/"
+ui:
+  static_use_hash: true
+  default_theme: simple
 
 outgoing:
-  request_timeout: 15.0
+  request_timeout: 10.0
   max_request_timeout: 30.0
+  pool_connections: 100
+  pool_maxsize: 20
+  enable_http2: true
 SEARXNG_EOF
 
 #=================================================
-# GENERATE RUSTFS BUCKET POLICY
+# RUSTFS BUCKET POLICY
 #=================================================
-ynh_script_progression --message="Configuring RustFS bucket policy..." --weight=1
+ynh_script_progression --message="Preparing RustFS bucket policy..." --weight=1
 
 cat > "$install_dir/bucket.config.json" << 'BUCKET_EOF'
 {
@@ -132,7 +115,7 @@ cat > "$install_dir/bucket.config.json" << 'BUCKET_EOF'
 BUCKET_EOF
 
 #=================================================
-# BUILD APP_URL
+# BUILD APP URL
 #=================================================
 if [ "$path" = "/" ]; then
     APP_URL="https://${domain}"
@@ -141,51 +124,47 @@ else
 fi
 
 #=================================================
-# GENERATE .env FILE
+# GENERATE .env
 #=================================================
-ynh_script_progression --message="Generating environment configuration..." --weight=1
+ynh_script_progression --message="Writing environment config..." --weight=1
 
 cat > "$install_dir/.env" << ENV_EOF
-# ============================================
-# LobeHub v2.1.38 — YunoHost deployment
-# Generated automatically — do not edit manually
-# ============================================
+# LobeHub — auto-generated by YunoHost installer
+# Do not edit manually — use: yunohost app config set lobehub
 
-# Application
 APP_URL=${APP_URL}
 LOBE_PORT=${port}
 RUSTFS_PORT=${port_rustfs_api}
 
-# PostgreSQL (ParadeDB = PostgreSQL + pgvector + pg_search)
-POSTGRES_PASSWORD=${postgres_password}
+# Database
 LOBE_DB_NAME=lobehub
+POSTGRES_PASSWORD=${postgres_password}
 
-# Auth (NextAuth built-in — no separate auth container)
+# Auth / Security
 KEY_VAULTS_SECRET=${key_vaults_secret}
 AUTH_SECRET=${auth_secret}
 
-# RustFS S3 storage
+# S3 / RustFS
 RUSTFS_ACCESS_KEY=${rustfs_access_key}
 RUSTFS_SECRET_KEY=${rustfs_secret_key}
 RUSTFS_LOBE_BUCKET=lobe
-S3_ENDPOINT=http://network-service:9000
 S3_PUBLIC_DOMAIN=${APP_URL}/s3
 
-# Initial admin credentials (used by LobeHub first-run setup)
+# Admin credentials (first-run setup)
 AUTH_ADMIN_EMAIL=${admin_email}
 AUTH_ADMIN_PASSWORD=${admin_password}
 
-# Optional proxy (uncomment if needed)
-# HTTP_PROXY=http://localhost:7890
-# HTTPS_PROXY=http://localhost:7890
+# JWKS (optional — LobeHub auto-generates if empty)
+JWKS_KEY=
 ENV_EOF
 
+chmod 600 "$install_dir/.env"
+
 #=================================================
-# DEPLOY DOCKER-COMPOSE FILE
+# DEPLOY DOCKER-COMPOSE
 #=================================================
 ynh_script_progression --message="Deploying Docker Compose configuration..." --weight=1
 
-# Substitute placeholders in the template and write final compose file
 sed \
     -e "s|__APP__|${app}|g" \
     -e "s|__INSTALL_DIR__|${install_dir}|g" \
@@ -195,61 +174,54 @@ sed \
     -e "s|__PORT_RUSTFS_CONSOLE__|${port_rustfs_console}|g" \
     ../conf/docker-compose.yml > "$install_dir/docker-compose.yml"
 
-chown "$app:$app" "$install_dir/docker-compose.yml"
-chown "$app:$app" "$install_dir/.env"
+chown root:root "$install_dir/docker-compose.yml"  # Docker runs as root
+chown root:root "$install_dir/.env"
 chown "$app:$app" "$install_dir/bucket.config.json"
 
 #=================================================
-# PULL DOCKER IMAGES
+# PRE-PULL DOCKER IMAGES
 #=================================================
-ynh_script_progression --message="Pulling Docker images — lobehub/lobehub, paradedb, rustfs, redis, searxng (may take several minutes)..." --weight=40
+ynh_script_progression --message="Pulling Docker images (this may take 5-10 minutes)..." --weight=50
 
 cd "$install_dir"
-docker-compose --project-name "$COMPOSE_PROJECT" pull
+docker compose --project-name "$app" pull
 
 #=================================================
-# CONFIGURE SYSTEMD SERVICE
+# SYSTEMD + NGINX
 #=================================================
 ynh_script_progression --message="Configuring systemd service..." --weight=1
-
 ynh_add_systemd_config
 
-#=================================================
-# CONFIGURE NGINX
-#=================================================
-ynh_script_progression --message="Configuring NGINX reverse proxy..." --weight=2
-
+ynh_script_progression --message="Configuring NGINX..." --weight=1
 ynh_add_nginx_config
 
 #=================================================
-# START THE STACK
+# START STACK
 #=================================================
-ynh_script_progression --message="Starting LobeHub stack (this may take up to 2 minutes)..." --weight=10
-
-ynh_systemd_action --service_name="$app" --action="start" --log_path=systemd --timeout=180
+ynh_script_progression --message="Starting LobeHub stack (first start may take 2-3 minutes)..." --weight=15
+ynh_systemd_action --service_name="$app" --action="start" --log_path=systemd --timeout=300
 
 #=================================================
-# WAIT FOR HEALTH
+# HEALTH CHECK
 #=================================================
 ynh_script_progression --message="Waiting for LobeHub to be ready..." --weight=5
 
-timeout=90
-while [ $timeout -gt 0 ]; do
+elapsed=0
+max_wait=180
+while [ $elapsed -lt $max_wait ]; do
     if curl -sf "http://127.0.0.1:${port}/api/health" &>/dev/null; then
+        ynh_print_info "LobeHub is up and running."
         break
     fi
-    sleep 3
-    timeout=$((timeout - 3))
+    sleep 5
+    elapsed=$((elapsed + 5))
 done
 
-if [ $timeout -le 0 ]; then
-    ynh_script_progression --message="Warning: LobeHub health check timed out, but service may still be starting." --weight=1
+if [ $elapsed -ge $max_wait ]; then
+    ynh_print_warn "Health check timed out — service may still be initializing. Check: journalctl -u $app"
 fi
 
 #=================================================
-# END
+# DONE
 #=================================================
-ynh_script_progression --message="LobeHub v2.1.38 installed successfully!" --last
-ynh_script_progression --message="URL: ${APP_URL}" --last
-ynh_script_progression --message="Login: ${admin_email}" --last
-ynh_script_progression --message="RustFS Console: https://${domain}:${port_rustfs_console}" --last
+ynh_script_progression --message="LobeHub installed successfully! URL: ${APP_URL} — Admin: ${admin_email}" --last

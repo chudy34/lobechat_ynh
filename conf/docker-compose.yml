@@ -1,83 +1,74 @@
-name: lobehub___APP__
-
-# LobeHub v2.1.38 — Full Self-Hosted Stack
-# Based on official docker-compose/deploy/docker-compose.yml
-#
-# Services:
-#   network-service  — shared network namespace (alpine)
-#   postgresql       — ParadeDB (PostgreSQL 17 + pgvector + pg_search)
-#   redis            — Session cache / rate limiting
-#   rustfs           — S3-compatible object storage (replaces MinIO in v2)
-#   rustfs-init      — One-time bucket setup
-#   searxng          — Built-in web search engine
-#   lobe             — LobeHub v2 main application (lobehub/lobehub)
+# LobeHub v2 — YunoHost deployment
+# Source: https://github.com/lobehub/lobehub/blob/main/docker-compose/deploy/docker-compose.yml
+# Requires: docker compose v2 (Docker CE)
+# Tuned for: 4 vCPU / 8 GB RAM / 75 GB NVMe
 
 services:
 
-  # ─────────────────────────────────────────────
-  # Shared network namespace
-  # All services with network_mode: service:network-service
-  # share this container's ports — simpler port management
-  # ─────────────────────────────────────────────
+  # ── Shared network namespace ──────────────────────────────────────────────
+  # rustfs + lobe share ports through this container's network
   network-service:
     image: alpine:latest
     container_name: __APP__-network
     restart: always
     ports:
-      - "127.0.0.1:__PORT_RUSTFS_API__:9000"    # RustFS S3 API
+      - "127.0.0.1:__PORT_RUSTFS_API__:9000"    # RustFS S3 API → nginx /s3/
       - "127.0.0.1:__PORT_RUSTFS_CONSOLE__:9001" # RustFS Console
-      - "127.0.0.1:__PORT__:3210"               # LobeHub app
+      - "127.0.0.1:__PORT__:3210"                # LobeHub app
     command: tail -f /dev/null
     networks:
       - lobe-network
 
-  # ─────────────────────────────────────────────
+  # ── PostgreSQL (ParadeDB) ─────────────────────────────────────────────────
   # ParadeDB = PostgreSQL 17 + pgvector + pg_search
-  # Required for knowledge base RAG and full-text search
-  # ─────────────────────────────────────────────
+  # Required for Knowledge Base (RAG) and full-text search
   postgresql:
     image: paradedb/paradedb:latest-pg17
     container_name: __APP__-postgres
     restart: always
-    ports:
-      - "127.0.0.1:5432:5432"
+    # Internal only — no host port binding (avoids conflict with host postgresql)
     volumes:
       - __DATA_DIR__/postgres:/var/lib/postgresql/data
     environment:
-      POSTGRES_DB: ${LOBE_DB_NAME}
+      POSTGRES_DB:       ${LOBE_DB_NAME}
       POSTGRES_PASSWORD: ${POSTGRES_PASSWORD}
-      POSTGRES_USER: postgres
+      POSTGRES_USER:     postgres
     healthcheck:
-      test: ["CMD-SHELL", "pg_isready -U postgres"]
+      test:     ["CMD-SHELL", "pg_isready -U postgres"]
       interval: 5s
-      timeout: 5s
-      retries: 10
+      timeout:  5s
+      retries:  10
+      start_period: 20s
+    # 4 vCPU / 8 GB RAM tuning
+    shm_size: "256m"
     networks:
       - lobe-network
 
-  # ─────────────────────────────────────────────
-  # Redis — session cache, rate limiting
-  # ─────────────────────────────────────────────
+  # ── Redis ─────────────────────────────────────────────────────────────────
   redis:
     image: redis:7-alpine
     container_name: __APP__-redis
     restart: always
-    command: redis-server --save 60 1000 --appendonly yes
+    command: >
+      redis-server
+      --save 60 1000
+      --appendonly yes
+      --maxmemory 512mb
+      --maxmemory-policy allkeys-lru
     volumes:
       - __DATA_DIR__/redis:/data
     healthcheck:
-      test: ["CMD", "redis-cli", "ping"]
+      test:     ["CMD", "redis-cli", "ping"]
       interval: 5s
-      timeout: 3s
-      retries: 5
+      timeout:  3s
+      retries:  5
+      start_period: 10s
     networks:
       - lobe-network
 
-  # ─────────────────────────────────────────────
-  # RustFS — S3-compatible object storage
-  # Replaces MinIO in LobeHub v2
-  # Stores: uploaded files, knowledge base docs, images
-  # ─────────────────────────────────────────────
+  # ── RustFS ───────────────────────────────────────────────────────────────
+  # S3-compatible object storage — replaces MinIO in LobeHub v2
+  # Shares port 9000/9001 through network-service
   rustfs:
     image: rustfs/rustfs:latest
     container_name: __APP__-rustfs
@@ -85,16 +76,16 @@ services:
     restart: always
     environment:
       RUSTFS_CONSOLE_ENABLE: "true"
-      RUSTFS_ACCESS_KEY: ${RUSTFS_ACCESS_KEY}
-      RUSTFS_SECRET_KEY: ${RUSTFS_SECRET_KEY}
+      RUSTFS_ACCESS_KEY:     ${RUSTFS_ACCESS_KEY}
+      RUSTFS_SECRET_KEY:     ${RUSTFS_SECRET_KEY}
     volumes:
       - __DATA_DIR__/rustfs:/data
     healthcheck:
-      test: ["CMD-SHELL", "wget -qO- http://localhost:9000/health >/dev/null 2>&1 || exit 1"]
+      test:     ["CMD-SHELL", "wget -qO- http://localhost:9000/health >/dev/null 2>&1 || exit 1"]
       interval: 5s
-      timeout: 3s
-      retries: 30
-      start_period: 10s
+      timeout:  3s
+      retries:  30
+      start_period: 15s
     command:
       - "--access-key"
       - "${RUSTFS_ACCESS_KEY}"
@@ -102,13 +93,12 @@ services:
       - "${RUSTFS_SECRET_KEY}"
       - "/data"
 
-  # ─────────────────────────────────────────────
-  # RustFS Init — creates the lobe bucket once
-  # Runs once then exits (restart: no)
-  # ─────────────────────────────────────────────
+  # ── RustFS Init ───────────────────────────────────────────────────────────
+  # One-shot: creates the lobe bucket with public-read policy, then exits
   rustfs-init:
     image: minio/mc:latest
     container_name: __APP__-rustfs-init
+    network_mode: "service:network-service"
     restart: "no"
     depends_on:
       rustfs:
@@ -119,18 +109,13 @@ services:
     command: >
       -c '
         set -eux;
-        mc alias set rustfs "http://network-service:9000" "${RUSTFS_ACCESS_KEY}" "${RUSTFS_SECRET_KEY}";
+        mc alias set rustfs "http://localhost:9000" "${RUSTFS_ACCESS_KEY}" "${RUSTFS_SECRET_KEY}";
         mc mb "rustfs/lobe" --ignore-existing;
         mc anonymous set-json "/bucket.config.json" "rustfs/lobe";
-        echo "Bucket initialized successfully."
+        echo "RustFS bucket ready."
       '
-    networks:
-      - lobe-network
 
-  # ─────────────────────────────────────────────
-  # SearXNG — privacy-respecting web search
-  # Powers the built-in web search tool in LobeHub
-  # ─────────────────────────────────────────────
+  # ── SearXNG ───────────────────────────────────────────────────────────────
   searxng:
     image: searxng/searxng:latest
     container_name: __APP__-searxng
@@ -142,12 +127,7 @@ services:
     networks:
       - lobe-network
 
-  # ─────────────────────────────────────────────
-  # LobeHub v2 — Main Application
-  # Image: lobehub/lobehub (v2.x — new in 2026)
-  # Features: multi-user, knowledge base, MCP, multi-agent,
-  #           artifacts, image gen, TTS/STT, built-in auth
-  # ─────────────────────────────────────────────
+  # ── LobeHub v2 ────────────────────────────────────────────────────────────
   lobe:
     image: lobehub/lobehub:latest
     container_name: __APP__-lobe
@@ -165,40 +145,42 @@ services:
       redis:
         condition: service_healthy
     environment:
-      # Security secrets
+      # Auth
       KEY_VAULTS_SECRET: ${KEY_VAULTS_SECRET}
-      AUTH_SECRET: ${AUTH_SECRET}
+      AUTH_SECRET:       ${AUTH_SECRET}
+      JWKS_KEY:          ${JWKS_KEY}
 
-      # Database (ParadeDB/PostgreSQL)
+      # Database
       DATABASE_URL: postgresql://postgres:${POSTGRES_PASSWORD}@postgresql:5432/${LOBE_DB_NAME}
 
-      # S3 / RustFS object storage
-      S3_BUCKET: ${RUSTFS_LOBE_BUCKET}
-      S3_ENDPOINT: http://network-service:9000
-      S3_ACCESS_KEY: ${RUSTFS_ACCESS_KEY}
-      S3_ACCESS_KEY_ID: ${RUSTFS_ACCESS_KEY}
+      # S3 / RustFS — internal endpoint via shared network namespace
+      S3_BUCKET:           ${RUSTFS_LOBE_BUCKET}
+      S3_ENDPOINT:         http://localhost:9000
+      S3_ACCESS_KEY:       ${RUSTFS_ACCESS_KEY}
+      S3_ACCESS_KEY_ID:    ${RUSTFS_ACCESS_KEY}
       S3_SECRET_ACCESS_KEY: ${RUSTFS_SECRET_KEY}
       S3_ENABLE_PATH_STYLE: "1"
-      S3_SET_ACL: "0"
-      S3_PUBLIC_DOMAIN: ${S3_PUBLIC_DOMAIN}
-      LLM_VISION_IMAGE_USE_BASE64: "1"
+      S3_SET_ACL:           "0"
+      S3_PUBLIC_DOMAIN:     ${S3_PUBLIC_DOMAIN}
 
       # Redis
-      REDIS_URL: redis://redis:6379
+      REDIS_URL:    redis://redis:6379
       REDIS_PREFIX: lobehub
-      REDIS_TLS: "0"
+      REDIS_TLS:    "0"
 
       # Web search
       SEARXNG_URL: http://searxng:8080
 
-      # App URL
-      APP_URL: ${APP_URL}
+      # App
+      APP_URL:      ${APP_URL}
       NEXTAUTH_URL: ${APP_URL}/api/auth
-      NODE_ENV: production
+      NODE_ENV:     production
+
+      # Vision / LLM
+      LLM_VISION_IMAGE_USE_BASE64: "1"
     env_file:
       - .env
 
 networks:
   lobe-network:
     driver: bridge
-    name: lobehub___APP___network
