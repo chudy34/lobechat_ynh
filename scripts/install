@@ -1,0 +1,27 @@
+#!/bin/bash
+
+source _common.sh
+source /usr/share/yunohost/helpers
+
+access_code="${access_code:-}"
+openai_api_key="${openai_api_key:-}"
+ynh_app_setting_set --key=access_code --value="$access_code"
+ynh_app_setting_set --key=openai_api_key --value="$openai_api_key"
+
+ynh_script_progression "Setting up source files..."
+ynh_setup_source --dest_dir="$install_dir"
+
+ynh_script_progression "Building Lobe Chat..."
+build_lobechat
+
+ynh_script_progression "Adding Lobe Chat configuration..."
+configure_lobechat_env
+ynh_config_add_nginx
+ynh_config_add_systemd
+yunohost service add "$app" --description="Modern self-hosted AI chat interface" --log="journalctl -u $app"
+ynh_config_add_logrotate
+
+ynh_script_progression "Starting $app's systemd service..."
+ynh_systemctl --service="$app" --action="restart"
+
+ynh_script_progression "Installation of $app completed"

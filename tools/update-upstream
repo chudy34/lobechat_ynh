@@ -1,0 +1,35 @@
+#!/usr/bin/env bash
+set -euo pipefail
+
+repo="AIDotNet/lobe-chat"
+branch="${1:-main}"
+tmpdir="$(mktemp -d)"
+trap 'rm -rf "$tmpdir"' EXIT
+
+echo "Resolving latest commit for $repo@$branch..."
+commit="$(git ls-remote "https://github.com/$repo.git" "refs/heads/$branch" | awk '{print $1}')"
+if [[ -z "$commit" ]]; then
+    echo "Unable to resolve branch $branch for $repo" >&2
+    exit 1
+fi
+
+archive="$tmpdir/source.tar.gz"
+url="https://github.com/$repo/archive/$commit.tar.gz"
+
+echo "Downloading $url..."
+curl -L "$url" -o "$archive"
+sha256="$(shasum -a 256 "$archive" | awk '{print $1}')"
+
+echo "Reading package version..."
+source_dir="$tmpdir/source"
+mkdir -p "$source_dir"
+tar -xzf "$archive" -C "$source_dir" --strip-components=1
+app_version="$(node -e 'console.log(require(process.argv[1]).version)' "$source_dir/package.json")"
+
+perl -0pi -e "s#version = \"[^\"]+\"#version = \"$app_version~ynh1\"#" manifest.toml
+perl -0pi -e "s#url = \"https://github.com/AIDotNet/lobe-chat/archive/[^\"]+\"#url = \"$url\"#" manifest.toml
+perl -0pi -e "s#sha256 = \"[a-f0-9]+\"#sha256 = \"$sha256\"#" manifest.toml
+perl -0pi -e "s#Commit: \`[a-f0-9]+\`#Commit: \`$commit\`#" README.md
+perl -0pi -e "s#Lobe Chat version: \`[^\`]+\`#Lobe Chat version: \`$app_version\`#" README.md
+
+echo "Updated to $repo@$commit ($app_version, sha256 $sha256)."

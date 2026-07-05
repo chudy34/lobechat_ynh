@@ -1,0 +1,85 @@
+#:schema https://raw.githubusercontent.com/YunoHost/apps/main/schemas/manifest.v2.schema.json
+
+packaging_format = 2
+
+id = "lobechat"
+name = "Lobe Chat"
+description.en = "Modern self-hosted AI chat interface"
+description.fr = "Interface moderne de discussion IA auto-hebergee"
+
+version = "1.11.9~ynh1"
+
+maintainers = ["chudy34"]
+
+[upstream]
+license = "MIT"
+website = "https://lobechat.com"
+admindoc = "https://lobehub.com/docs/self-hosting/start"
+userdoc = "https://lobehub.com/docs"
+code = "https://github.com/AIDotNet/lobe-chat"
+
+[integration]
+yunohost = ">= 12.1.39"
+helpers_version = "2.1"
+architectures = "all"
+multi_instance = true
+
+ldap = false
+sso = false
+
+disk = "1500M"
+ram.build = "2500M"
+ram.runtime = "750M"
+
+[install]
+    [install.domain]
+    type = "domain"
+
+    [install.path]
+    type = "path"
+    default = "/"
+
+    [install.init_main_permission]
+    type = "group"
+    default = "visitors"
+
+    [install.access_code]
+    ask.en = "Access code for Lobe Chat"
+    ask.fr = "Code d'acces pour Lobe Chat"
+    help.en = "Leave empty only if access is restricted by YunoHost permissions."
+    help.fr = "Laissez vide uniquement si l'acces est limite par les permissions YunoHost."
+    type = "password"
+    optional = true
+
+    [install.openai_api_key]
+    ask.en = "Default OpenAI API key"
+    ask.fr = "Cle API OpenAI par defaut"
+    help.en = "Optional. Users may also configure providers in Lobe Chat."
+    help.fr = "Optionnel. Les utilisateurs peuvent aussi configurer les fournisseurs dans Lobe Chat."
+    type = "password"
+    optional = true
+
+[resources]
+    [resources.sources]
+
+    [resources.sources.main]
+    url = "https://github.com/AIDotNet/lobe-chat/archive/d8950b27eaef10bdff72da894c8190a87a82a972.tar.gz"
+    sha256 = "5c8275a988381a8eab36d327957e4017e59505de1e3ad0979b8371f7f53fd5fa"
+
+    [resources.system_user]
+
+    [resources.install_dir]
+
+    [resources.data_dir]
+
+    [resources.permissions]
+    main.url = "/"
+    main.auth_header = false
+
+    [resources.ports]
+
+    [resources.apt]
+    packages = "build-essential, python3, pkg-config"
+
+    [resources.nodejs]
+    version = "20"
