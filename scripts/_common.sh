@@ -110,6 +110,8 @@ wait_for_lobehub() {
         elapsed=$((elapsed + 5))
     done
 
+    systemctl status "$app" --no-pager || true
+    journalctl -u "$app" -n 200 --no-pager || true
     docker compose --project-name "$app" --file "$install_dir/docker-compose.yml" ps -a || true
     docker logs --tail=200 "$app-lobe" || true
     docker logs --tail=200 "$app-rustfs-init" || true

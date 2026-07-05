@@ -162,7 +162,7 @@ services:
 
       # Redis
       REDIS_URL:    redis://redis:6379
-      REDIS_PREFIX: lobehub
+      REDIS_PREFIX: lobechat
       REDIS_TLS:    "0"
 
       # Web search

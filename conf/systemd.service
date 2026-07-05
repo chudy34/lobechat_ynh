@@ -5,15 +5,14 @@ After=docker.service network-online.target
 Wants=network-online.target
 
 [Service]
-Type=oneshot
-RemainAfterExit=yes
+Type=simple
 User=root
 WorkingDirectory=__INSTALL_DIR__
 
 ExecStart=docker compose \
     --project-name __APP__ \
     --file __INSTALL_DIR__/docker-compose.yml \
-    up -d --remove-orphans
+    up --remove-orphans
 
 ExecStop=docker compose \
     --project-name __APP__ \
@@ -26,7 +25,7 @@ ExecReload=docker compose \
     up -d --remove-orphans
 
 Restart=on-failure
-RestartSec=10
+RestartSec=10s
 TimeoutStartSec=300
 TimeoutStopSec=60
 
