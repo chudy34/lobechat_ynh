@@ -93,7 +93,10 @@ ynh_add_nginx_config
 # START STACK
 #=================================================
 ynh_script_progression --message="Starting LobeHub stack (first start may take up to 10 minutes)..." --weight=15
-ynh_systemd_action --service_name="$app" --action="start" --log_path=systemd --timeout=300
+# Use "restart" instead of "start": with Type=oneshot + RemainAfterExit=yes,
+# systemd keeps the unit in "active (exited)" state after a previous run, so
+# "start" becomes a no-op. "restart" forces ExecStop + ExecStart again.
+ynh_systemd_action --service_name="$app" --action="restart" --log_path=systemd --timeout=300
 
 #=================================================
 # HEALTH CHECK

@@ -35,7 +35,10 @@ systemctl daemon-reload
 ynh_restore_file --origin_path="/etc/nginx/conf.d/$domain.d/$app.conf"
 
 ynh_script_progression --message="Starting restored LobeHub..." --weight=10
-ynh_systemd_action --service_name="$app" --action="start" --log_path=systemd --timeout=300
+# Use "restart" instead of "start": with Type=oneshot + RemainAfterExit=yes,
+# systemd keeps the unit in "active (exited)" state after a previous run, so
+# "start" becomes a no-op. "restart" forces ExecStop + ExecStart again.
+ynh_systemd_action --service_name="$app" --action="restart" --log_path=systemd --timeout=300
 
 # Wait for PostgreSQL to be ready, then restore database dump
 ynh_script_progression --message="Waiting for PostgreSQL..." --weight=3

@@ -26,7 +26,12 @@ ExecReload=docker compose \
     --file __INSTALL_DIR__/docker-compose.yml \
     up -d --remove-orphans
 
-Restart=on-failure
+# NOTE: Restart=on-failure is intentionally omitted — with Type=oneshot it
+# causes systemd to respawn the unit when docker compose exits non-zero, but
+# oneshot services report "active (exited)" after success, so systemd won't
+# re-run ExecStart on subsequent "systemctl start" unless the unit is first
+# stopped. The YunoHost install/upgrade scripts handle restart explicitly.
+
 RestartSec=15s
 TimeoutStartSec=300
 TimeoutStopSec=60

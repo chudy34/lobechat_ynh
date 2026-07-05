@@ -162,12 +162,21 @@ wait_for_lobehub() {
         elapsed=$((elapsed + 5))
     done
 
+    # Health check failed — gather diagnostics
+    ynh_print_warn "LobeHub did not respond on port ${port} within ${max_wait}s."
+    ynh_print_warn "--- systemctl status $app ---"
     systemctl status "$app" --no-pager || true
+    ynh_print_warn "--- journalctl (last 200 lines) ---"
     journalctl -u "$app" -n 200 --no-pager || true
+    ynh_print_warn "--- docker compose ps -a ---"
     docker compose --project-name "$app" --file "$install_dir/docker-compose.yml" ps -a || true
-    docker logs --tail=200 "$app-lobe" || true
-    docker logs --tail=200 "$app-rustfs-init" || true
-    ynh_die "Health check timed out. Check: journalctl -u $app and docker logs $app-lobe"
+    ynh_print_warn "--- docker logs (lobe) ---"
+    docker compose --project-name "$app" --file "$install_dir/docker-compose.yml" logs --tail=200 lobe 2>&1 || \
+        docker logs --tail=200 "${app}-lobe" 2>&1 || true
+    ynh_print_warn "--- docker logs (rustfs-init) ---"
+    docker compose --project-name "$app" --file "$install_dir/docker-compose.yml" logs --tail=200 rustfs-init 2>&1 || \
+        docker logs --tail=200 "${app}-rustfs-init" 2>&1 || true
+    ynh_die "Health check timed out. Check: journalctl -u $app and docker compose logs"
 }
 
 install_docker_ce() {
