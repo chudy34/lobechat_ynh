@@ -31,6 +31,10 @@ prepare_data_dirs() {
     chmod 700 "$data_dir/postgres"
     chown -R 999:999 "$data_dir/redis"
     chmod 750 "$data_dir/redis"
+
+    # RustFS container runs as numeric uid 10001.
+    chown -R 10001:10001 "$data_dir/rustfs"
+    chmod 750 "$data_dir/rustfs"
 }
 
 write_env_file() {
