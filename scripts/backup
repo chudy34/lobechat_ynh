@@ -1,6 +1,6 @@
 #!/bin/bash
 
-source _common.sh
+source ../settings/scripts/_common.sh
 source /usr/share/yunohost/helpers
 
 ynh_script_progression --message="Stopping stack for consistent backup..." --weight=2
@@ -14,6 +14,10 @@ ynh_backup --src_path="$install_dir"
 
 ynh_script_progression --message="Backing up data..." --weight=20
 ynh_backup --src_path="$data_dir"
+
+ynh_script_progression --message="Backing up system configuration..." --weight=2
+ynh_backup --src_path="/etc/systemd/system/$app.service"
+ynh_backup --src_path="/etc/nginx/conf.d/$domain.d/$app.conf"
 
 #=================================================
 # RESTART AFTER BACKUP
