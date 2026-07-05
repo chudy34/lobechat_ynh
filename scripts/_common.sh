@@ -84,6 +84,46 @@ BUCKET_EOF
     chown "$app:$app" "$install_dir/bucket.config.json"
 }
 
+write_searxng_config() {
+    # Ensure directory exists and is searchable
+    mkdir -p "$data_dir/searxng"
+    chown "$app:$app" "$data_dir/searxng"
+    chmod 755 "$data_dir/searxng"
+
+    cat > "$data_dir/searxng/settings.yml" << SEARXNG_EOF
+use_default_settings: true
+
+server:
+  secret_key: "${searxng_secret}"
+  limiter: false
+  image_proxy: true
+  port: 8080
+  bind_address: "0.0.0.0"
+  method: "POST"
+
+search:
+  safe_search: 0
+  formats:
+    - html
+    - json
+
+ui:
+  static_use_hash: true
+  default_theme: simple
+
+outgoing:
+  request_timeout: 10.0
+  max_request_timeout: 30.0
+  pool_connections: 100
+  pool_maxsize: 20
+  enable_http2: true
+SEARXNG_EOF
+
+    chown "$app:$app" "$data_dir/searxng/settings.yml"
+    chmod 644 "$data_dir/searxng/settings.yml"
+}
+
+
 write_compose_file() {
     sed \
         -e "s|__APP__|${app}|g" \

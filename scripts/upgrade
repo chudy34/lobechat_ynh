@@ -13,9 +13,34 @@ key_vaults_secret=$(ynh_app_setting_get --app="$app" --key=key_vaults_secret)
 auth_secret=$(ynh_app_setting_get --app="$app" --key=auth_secret)
 searxng_secret=$(ynh_app_setting_get --app="$app" --key=searxng_secret)
 admin_email=$(ynh_app_setting_get --app="$app" --key=admin_email)
-admin_password=$(ynh_app_setting_get --app="$app" --key=admin_password)
+admin_password=$(ynh_app_setting_get --app="$app" --key=admin_password)# Ensure all secrets are set (fallback for upgrades from older package revisions)
+if [ -z "$postgres_password" ]; then
+    postgres_password=$(gen_password)
+    ynh_app_setting_set --app="$app" --key=postgres_password --value="$postgres_password"
+fi
+if [ -z "$rustfs_access_key" ]; then
+    rustfs_access_key="lobehubadmin"
+    ynh_app_setting_set --app="$app" --key=rustfs_access_key --value="$rustfs_access_key"
+fi
+if [ -z "$rustfs_secret_key" ]; then
+    rustfs_secret_key=$(gen_password)
+    ynh_app_setting_set --app="$app" --key=rustfs_secret_key --value="$rustfs_secret_key"
+fi
+if [ -z "$key_vaults_secret" ]; then
+    key_vaults_secret=$(gen_secret)
+    ynh_app_setting_set --app="$app" --key=key_vaults_secret --value="$key_vaults_secret"
+fi
+if [ -z "$auth_secret" ]; then
+    auth_secret=$(gen_secret)
+    ynh_app_setting_set --app="$app" --key=auth_secret --value="$auth_secret"
+fi
+if [ -z "$searxng_secret" ]; then
+    searxng_secret=$(gen_secret)
+    ynh_app_setting_set --app="$app" --key=searxng_secret --value="$searxng_secret"
+fi
 
 #=================================================
+
 # STOP SERVICE
 #=================================================
 ynh_script_progression --message="Stopping LobeHub..." --weight=2
@@ -45,6 +70,13 @@ write_env_file
 
 ynh_script_progression --message="Updating RustFS bucket policy..." --weight=1
 write_bucket_policy
+
+# Ensure SearXNG configuration exists (especially if upgrading from an older version that didn't have it)
+if [ ! -f "$data_dir/searxng/settings.yml" ]; then
+    ynh_script_progression --message="Creating SearXNG configuration..." --weight=1
+    write_searxng_config
+fi
+
 
 #=================================================
 # UPDATE DOCKER-COMPOSE
