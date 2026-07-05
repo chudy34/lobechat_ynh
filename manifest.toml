@@ -2,7 +2,7 @@
 
 packaging_format = 2
 
-id = "lobechat"
+id = "lobehub"
 name = "LobeHub"
 description.en = "Self-hosted AI workspace with multiple model providers"
 description.fr = "Espace de travail IA auto-hébergé avec plusieurs fournisseurs"
@@ -56,10 +56,10 @@ ram.runtime = "2000M"
   [resources.system_user]
 
   [resources.install_dir]
-  # /var/www/lobechat  — compose file, .env, configs
+  # /var/www/lobehub  — compose file, .env, configs
 
   [resources.data_dir]
-  # /home/yunohost.app/lobechat  — postgres, rustfs, redis, searxng data
+  # /home/yunohost.app/lobehub  — postgres, rustfs, redis, searxng data
 
   [resources.permissions]
   main.url         = "/"
