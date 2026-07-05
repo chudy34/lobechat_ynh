@@ -98,11 +98,19 @@ services:
     entrypoint: /bin/sh
     command: >
       -c '
-        set -eux;
-        mc alias set rustfs "http://rustfs:9000" "${RUSTFS_ACCESS_KEY}" "${RUSTFS_SECRET_KEY}";
-        mc mb "rustfs/${RUSTFS_LOBE_BUCKET}" --ignore-existing || true;
-        mc anonymous set-json "/bucket.config.json" "rustfs/${RUSTFS_LOBE_BUCKET}" || true;
-        echo "RustFS bucket ready."
+        set -u;
+        for i in 1 2 3 4 5 6 7 8 9 10 11 12 13 14 15 16 17 18 19 20 21 22 23 24 25 26 27 28 29 30; do
+          if mc alias set rustfs "http://rustfs:9000" "${RUSTFS_ACCESS_KEY}" "${RUSTFS_SECRET_KEY}"; then
+            mc mb "rustfs/${RUSTFS_LOBE_BUCKET}" --ignore-existing || true;
+            mc anonymous set-json "/bucket.config.json" "rustfs/${RUSTFS_LOBE_BUCKET}" || true;
+            echo "RustFS bucket ready.";
+            exit 0;
+          fi;
+          echo "Waiting for RustFS S3 API...";
+          sleep 4;
+        done;
+        echo "RustFS bucket initialization skipped after timeout.";
+        exit 0
       '
     networks:
       - lobe-network
@@ -163,7 +171,6 @@ services:
       # App
       APP_URL:      ${APP_URL}
       NODE_ENV:     production
-      NEXT_PUBLIC_SERVICE_MODE: server
 
       # Vision / LLM
       LLM_VISION_IMAGE_USE_BASE64: "1"
