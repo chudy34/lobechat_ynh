@@ -26,13 +26,6 @@ rustfs_secret_key=$(gen_password)
 key_vaults_secret=$(gen_secret)
 auth_secret=$(gen_secret)
 searxng_secret=$(gen_secret)
-# JWKS key — generate RSA keypair for NextAuth
-jwks_key=$(openssl genrsa 2048 2>/dev/null | openssl rsa -pubout 2>/dev/null | \
-    python3 -c "
-import sys, json, subprocess, base64
-# Simplified JWKS — LobeHub will auto-generate if we pass a placeholder
-# Use the format from official .env.example
-" 2>/dev/null || echo "")
 
 # Persist all secrets
 ynh_app_setting_set --app="$app" --key=postgres_password  --value="$postgres_password"
@@ -153,9 +146,6 @@ S3_PUBLIC_DOMAIN=${APP_URL}/s3
 # Admin credentials (first-run setup)
 AUTH_ADMIN_EMAIL=${admin_email}
 AUTH_ADMIN_PASSWORD=${admin_password}
-
-# JWKS (optional — LobeHub auto-generates if empty)
-JWKS_KEY=
 ENV_EOF
 
 chmod 600 "$install_dir/.env"
@@ -209,7 +199,7 @@ ynh_script_progression --message="Waiting for LobeHub to be ready..." --weight=5
 elapsed=0
 max_wait=180
 while [ $elapsed -lt $max_wait ]; do
-    if curl -sf "http://127.0.0.1:${port}/api/health" &>/dev/null; then
+    if curl -sf "http://127.0.0.1:${port}/" &>/dev/null; then
         ynh_print_info "LobeHub is up and running."
         break
     fi
@@ -218,6 +208,8 @@ while [ $elapsed -lt $max_wait ]; do
 done
 
 if [ $elapsed -ge $max_wait ]; then
+    docker compose --project-name "$app" ps || true
+    docker logs --tail=200 "$app-lobe" || true
     ynh_die "Health check timed out. Check: journalctl -u $app and docker logs $app-lobe"
 fi
 

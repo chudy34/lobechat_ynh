@@ -36,6 +36,11 @@ else
     APP_URL="https://${domain}${path}"
 fi
 
+# Remove obsolete empty JWKS override from earlier package revisions.
+if [ -f "$install_dir/.env" ]; then
+    sed -i '/^JWKS_KEY=/d' "$install_dir/.env"
+fi
+
 #=================================================
 # UPDATE DOCKER-COMPOSE
 #=================================================

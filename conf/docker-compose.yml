@@ -138,7 +138,6 @@ services:
       # Auth
       KEY_VAULTS_SECRET: ${KEY_VAULTS_SECRET}
       AUTH_SECRET:       ${AUTH_SECRET}
-      JWKS_KEY:          ${JWKS_KEY}
 
       # Database
       DATABASE_URL: postgresql://postgres:${POSTGRES_PASSWORD}@postgresql:5432/${LOBE_DB_NAME}
