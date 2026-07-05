@@ -42,6 +42,9 @@ ynh_app_setting_set --app="$app" --key=admin_password     --value="$admin_passwo
 #=================================================
 ynh_script_progression --message="Preparing data directories..." --weight=1
 prepare_data_dirs
+# Wipe stale PostgreSQL data if a previous ParadeDB install left an
+# incompatible postgresql.conf (pg_search preload library).
+clean_postgres_data_dir
 
 #=================================================
 # SEARXNG SETTINGS

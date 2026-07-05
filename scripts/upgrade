@@ -66,6 +66,11 @@ fi
 
 ynh_script_progression --message="Preparing data directories..." --weight=1
 prepare_data_dirs
+# Wipe stale PostgreSQL data if a previous ParadeDB install left an
+# incompatible postgresql.conf (pg_search preload library). This is a
+# destructive but necessary migration step for users coming from the
+# ParadeDB era of this package.
+clean_postgres_data_dir
 
 ynh_script_progression --message="Updating environment config..." --weight=1
 write_env_file
