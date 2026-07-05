@@ -14,7 +14,7 @@ Then test the package on a YunoHost server:
 
 ```bash
 sudo yunohost app install https://github.com/chudy34/lobechat_ynh
-sudo yunohost app upgrade lobechat -u https://github.com/chudy34/lobechat_ynh
+sudo yunohost app upgrade lobehub -u https://github.com/chudy34/lobechat_ynh
 ```
 
 ## Current upstream
