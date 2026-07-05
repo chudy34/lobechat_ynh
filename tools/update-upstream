@@ -18,7 +18,7 @@ process.stdin.on("end", () => {
 fi
 
 version="${tag#v}"
-image="lobehub/lobehub:$tag"
+image="lobehub/lobehub:$version"
 
 echo "Updating package to $repo release $tag..."
 

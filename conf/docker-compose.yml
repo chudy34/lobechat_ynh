@@ -129,7 +129,7 @@ services:
 
   # ── LobeHub ───────────────────────────────────────────────────────────────
   lobe:
-    image: lobehub/lobehub:v2.2.9
+    image: lobehub/lobehub:2.2.9
     container_name: __APP__-lobe
     network_mode: "service:network-service"
     restart: always
