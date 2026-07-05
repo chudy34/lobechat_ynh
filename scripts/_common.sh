@@ -86,6 +86,7 @@ write_bucket_policy() {
 BUCKET_EOF
 
     chown "$app:$app" "$install_dir/bucket.config.json"
+    chmod 644 "$install_dir/bucket.config.json"
 }
 
 write_searxng_config() {
