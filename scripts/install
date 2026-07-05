@@ -3,25 +3,229 @@
 source _common.sh
 source /usr/share/yunohost/helpers
 
-access_code="${access_code:-}"
-openai_api_key="${openai_api_key:-}"
-ynh_app_setting_set --key=access_code --value="$access_code"
-ynh_app_setting_set --key=openai_api_key --value="$openai_api_key"
+#=================================================
+# RETRIEVE INSTALL ARGS
+#=================================================
+admin_email="$YNH_APP_ARG_ADMIN_EMAIL"
+admin_password="$YNH_APP_ARG_ADMIN_PASSWORD"
 
-ynh_script_progression "Setting up source files..."
-ynh_setup_source --dest_dir="$install_dir"
+#=================================================
+# INSTALL DOCKER CE (with Compose v2)
+#=================================================
+ynh_script_progression --message="Installing Docker CE with Compose v2..." --weight=15
+install_docker_ce
 
-ynh_script_progression "Building Lobe Chat..."
-build_lobechat
+#=================================================
+# GENERATE ALL SECRETS
+#=================================================
+ynh_script_progression --message="Generating cryptographic secrets..." --weight=1
 
-ynh_script_progression "Adding Lobe Chat configuration..."
-configure_lobechat_env
-ynh_config_add_nginx
-ynh_config_add_systemd
-yunohost service add "$app" --description="Modern self-hosted AI chat interface" --log="journalctl -u $app"
-ynh_config_add_logrotate
+postgres_password=$(gen_password)
+rustfs_access_key="lobehubadmin"
+rustfs_secret_key=$(gen_password)
+key_vaults_secret=$(gen_secret)
+auth_secret=$(gen_secret)
+searxng_secret=$(gen_secret)
+# JWKS key — generate RSA keypair for NextAuth
+jwks_key=$(openssl genrsa 2048 2>/dev/null | openssl rsa -pubout 2>/dev/null | \
+    python3 -c "
+import sys, json, subprocess, base64
+# Simplified JWKS — LobeHub will auto-generate if we pass a placeholder
+# Use the format from official .env.example
+" 2>/dev/null || echo "")
 
-ynh_script_progression "Starting $app's systemd service..."
-ynh_systemctl --service="$app" --action="restart"
+# Persist all secrets
+ynh_app_setting_set --app="$app" --key=postgres_password  --value="$postgres_password"
+ynh_app_setting_set --app="$app" --key=rustfs_access_key  --value="$rustfs_access_key"
+ynh_app_setting_set --app="$app" --key=rustfs_secret_key  --value="$rustfs_secret_key"
+ynh_app_setting_set --app="$app" --key=key_vaults_secret  --value="$key_vaults_secret"
+ynh_app_setting_set --app="$app" --key=auth_secret        --value="$auth_secret"
+ynh_app_setting_set --app="$app" --key=searxng_secret     --value="$searxng_secret"
+ynh_app_setting_set --app="$app" --key=admin_email        --value="$admin_email"
+ynh_app_setting_set --app="$app" --key=admin_password     --value="$admin_password"
 
-ynh_script_progression "Installation of $app completed"
+#=================================================
+# PREPARE DATA DIRECTORIES
+#=================================================
+ynh_script_progression --message="Preparing data directories..." --weight=1
+
+mkdir -p "$data_dir/postgres"
+mkdir -p "$data_dir/rustfs"
+mkdir -p "$data_dir/redis"
+mkdir -p "$data_dir/searxng"
+
+chown -R "$app:$app" "$install_dir"
+chown -R "$app:$app" "$data_dir"
+
+# PostgreSQL data dir needs to be owned by postgres uid (999 in Docker)
+# We set permissions wide enough for Docker to manage
+chmod 750 "$data_dir/postgres"
+
+#=================================================
+# SEARXNG SETTINGS
+#=================================================
+ynh_script_progression --message="Configuring SearXNG..." --weight=1
+
+cat > "$data_dir/searxng/settings.yml" << SEARXNG_EOF
+use_default_settings: true
+
+server:
+  secret_key: "${searxng_secret}"
+  limiter: false
+  image_proxy: true
+  port: 8080
+  bind_address: "0.0.0.0"
+  method: "POST"
+
+search:
+  safe_search: 0
+  formats:
+    - html
+    - json
+
+ui:
+  static_use_hash: true
+  default_theme: simple
+
+outgoing:
+  request_timeout: 10.0
+  max_request_timeout: 30.0
+  pool_connections: 100
+  pool_maxsize: 20
+  enable_http2: true
+SEARXNG_EOF
+
+#=================================================
+# RUSTFS BUCKET POLICY
+#=================================================
+ynh_script_progression --message="Preparing RustFS bucket policy..." --weight=1
+
+cat > "$install_dir/bucket.config.json" << 'BUCKET_EOF'
+{
+  "Version": "2012-10-17",
+  "Statement": [
+    {
+      "Effect": "Allow",
+      "Principal": { "AWS": ["*"] },
+      "Action": ["s3:GetObject"],
+      "Resource": ["arn:aws:s3:::lobe/*"]
+    }
+  ]
+}
+BUCKET_EOF
+
+#=================================================
+# BUILD APP URL
+#=================================================
+if [ "$path" = "/" ]; then
+    APP_URL="https://${domain}"
+else
+    APP_URL="https://${domain}${path}"
+fi
+
+#=================================================
+# GENERATE .env
+#=================================================
+ynh_script_progression --message="Writing environment config..." --weight=1
+
+cat > "$install_dir/.env" << ENV_EOF
+# Lobe Chat — auto-generated by YunoHost installer
+# Do not edit manually.
+
+LOBE_IMAGE=${app}-lobe:d8950b27eaef10bdff72da894c8190a87a82a972
+LOBE_BUILD_CONTEXT=https://github.com/AIDotNet/lobe-chat.git#d8950b27eaef10bdff72da894c8190a87a82a972
+
+APP_URL=${APP_URL}
+LOBE_PORT=${port}
+RUSTFS_PORT=${port_rustfs_api}
+
+# Database
+LOBE_DB_NAME=lobehub
+POSTGRES_PASSWORD=${postgres_password}
+
+# Auth / Security
+KEY_VAULTS_SECRET=${key_vaults_secret}
+AUTH_SECRET=${auth_secret}
+
+# S3 / RustFS
+RUSTFS_ACCESS_KEY=${rustfs_access_key}
+RUSTFS_SECRET_KEY=${rustfs_secret_key}
+RUSTFS_LOBE_BUCKET=lobe
+S3_PUBLIC_DOMAIN=${APP_URL}/s3
+
+# Admin credentials (first-run setup)
+AUTH_ADMIN_EMAIL=${admin_email}
+AUTH_ADMIN_PASSWORD=${admin_password}
+
+# JWKS (optional — LobeHub auto-generates if empty)
+JWKS_KEY=
+ENV_EOF
+
+chmod 600 "$install_dir/.env"
+
+#=================================================
+# DEPLOY DOCKER-COMPOSE
+#=================================================
+ynh_script_progression --message="Deploying Docker Compose configuration..." --weight=1
+
+sed \
+    -e "s|__APP__|${app}|g" \
+    -e "s|__INSTALL_DIR__|${install_dir}|g" \
+    -e "s|__DATA_DIR__|${data_dir}|g" \
+    -e "s|__PORT__|${port}|g" \
+    -e "s|__PORT_RUSTFS_API__|${port_rustfs_api}|g" \
+    -e "s|__PORT_RUSTFS_CONSOLE__|${port_rustfs_console}|g" \
+    ../conf/docker-compose.yml > "$install_dir/docker-compose.yml"
+
+chown root:root "$install_dir/docker-compose.yml"  # Docker runs as root
+chown root:root "$install_dir/.env"
+chown "$app:$app" "$install_dir/bucket.config.json"
+
+#=================================================
+# PRE-PULL DOCKER IMAGES
+#=================================================
+ynh_script_progression --message="Pulling Docker images (this may take 5-10 minutes)..." --weight=50
+
+cd "$install_dir"
+docker compose --project-name "$app" pull --ignore-buildable
+docker compose --project-name "$app" build --pull lobe
+
+#=================================================
+# SYSTEMD + NGINX
+#=================================================
+ynh_script_progression --message="Configuring systemd service..." --weight=1
+ynh_add_systemd_config
+
+ynh_script_progression --message="Configuring NGINX..." --weight=1
+ynh_add_nginx_config
+
+#=================================================
+# START STACK
+#=================================================
+ynh_script_progression --message="Starting LobeHub stack (first start may take 2-3 minutes)..." --weight=15
+ynh_systemd_action --service_name="$app" --action="start" --log_path=systemd --timeout=300
+
+#=================================================
+# HEALTH CHECK
+#=================================================
+ynh_script_progression --message="Waiting for LobeHub to be ready..." --weight=5
+
+elapsed=0
+max_wait=180
+while [ $elapsed -lt $max_wait ]; do
+    if curl -sf "http://127.0.0.1:${port}/api/health" &>/dev/null; then
+        ynh_print_info "LobeHub is up and running."
+        break
+    fi
+    sleep 5
+    elapsed=$((elapsed + 5))
+done
+
+if [ $elapsed -ge $max_wait ]; then
+    ynh_print_warn "Health check timed out — service may still be initializing. Check: journalctl -u $app"
+fi
+
+#=================================================
+# DONE
+#=================================================
+ynh_script_progression --message="LobeHub installed successfully! URL: ${APP_URL} — Admin: ${admin_email}" --last

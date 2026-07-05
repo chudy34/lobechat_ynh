@@ -1,85 +1,76 @@
-#:schema https://raw.githubusercontent.com/YunoHost/apps/main/schemas/manifest.v2.schema.json
+#:schema https://raw.githubusercontent.com/YunoHost/apps/master/schemas/manifest.v2.schema.json
 
 packaging_format = 2
 
 id = "lobechat"
 name = "Lobe Chat"
-description.en = "Modern self-hosted AI chat interface"
-description.fr = "Interface moderne de discussion IA auto-hebergee"
+description.en = "Self-hosted AI chat interface with multiple model providers"
+description.fr = "Interface de discussion IA auto-hébergée avec plusieurs fournisseurs"
 
 version = "1.11.9~ynh1"
 
 maintainers = ["chudy34"]
 
 [upstream]
-license = "MIT"
-website = "https://lobechat.com"
-admindoc = "https://lobehub.com/docs/self-hosting/start"
-userdoc = "https://lobehub.com/docs"
-code = "https://github.com/AIDotNet/lobe-chat"
+license    = "MIT"
+website    = "https://lobechat.com"
+admindoc   = "https://lobehub.com/docs/self-hosting/platform/docker-compose"
+userdoc    = "https://lobehub.com/docs"
+code       = "https://github.com/AIDotNet/lobe-chat"
 
 [integration]
-yunohost = ">= 12.1.39"
-helpers_version = "2.1"
-architectures = "all"
-multi_instance = true
-
+yunohost      = ">= 11.2"
+architectures = ["amd64", "arm64"]
+multi_instance = false
 ldap = false
-sso = false
-
-disk = "1500M"
-ram.build = "2500M"
-ram.runtime = "750M"
+sso  = false
+disk        = "4000M"
+ram.build   = "512M"
+ram.runtime = "2000M"
 
 [install]
-    [install.domain]
-    type = "domain"
 
-    [install.path]
-    type = "path"
-    default = "/"
+  [install.domain]
+  type = "domain"
 
-    [install.init_main_permission]
-    type = "group"
-    default = "visitors"
+  [install.path]
+  type    = "path"
+  default = "/"
 
-    [install.access_code]
-    ask.en = "Access code for Lobe Chat"
-    ask.fr = "Code d'acces pour Lobe Chat"
-    help.en = "Leave empty only if access is restricted by YunoHost permissions."
-    help.fr = "Laissez vide uniquement si l'acces est limite par les permissions YunoHost."
-    type = "password"
-    optional = true
+  [install.init_main_permission]
+  type    = "group"
+  default = "visitors"
 
-    [install.openai_api_key]
-    ask.en = "Default OpenAI API key"
-    ask.fr = "Cle API OpenAI par defaut"
-    help.en = "Optional. Users may also configure providers in Lobe Chat."
-    help.fr = "Optionnel. Les utilisateurs peuvent aussi configurer les fournisseurs dans Lobe Chat."
-    type = "password"
-    optional = true
+  [install.admin_email]
+  ask.en = "Admin e-mail (first login)"
+  ask.fr = "E-mail administrateur (première connexion)"
+  type   = "email"
+
+  [install.admin_password]
+  ask.en = "Admin password"
+  ask.fr = "Mot de passe administrateur"
+  type   = "password"
 
 [resources]
-    [resources.sources]
 
-    [resources.sources.main]
-    url = "https://github.com/AIDotNet/lobe-chat/archive/d8950b27eaef10bdff72da894c8190a87a82a972.tar.gz"
-    sha256 = "5c8275a988381a8eab36d327957e4017e59505de1e3ad0979b8371f7f53fd5fa"
+  [resources.system_user]
 
-    [resources.system_user]
+  [resources.install_dir]
+  # /var/www/lobechat  — compose file, .env, configs
 
-    [resources.install_dir]
+  [resources.data_dir]
+  # /home/yunohost.app/lobechat  — postgres, rustfs, redis, searxng data
 
-    [resources.data_dir]
+  [resources.permissions]
+  main.url         = "/"
+  main.auth_header = false
 
-    [resources.permissions]
-    main.url = "/"
-    main.auth_header = false
+  [resources.ports]
+  main.default           = 3210
+  rustfs_api.default     = 9000
+  rustfs_console.default = 9001
 
-    [resources.ports]
-
-    [resources.apt]
-    packages = "build-essential, python3, pkg-config"
-
-    [resources.nodejs]
-    version = "20"
+  [resources.apt]
+  # Only base tools — Docker CE is installed manually in install script
+  # because docker.io (Debian) ships docker compose v1, we need v2
+  packages = ["curl", "openssl", "ca-certificates", "gnupg", "lsb-release"]

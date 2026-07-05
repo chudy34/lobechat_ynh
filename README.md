@@ -2,7 +2,7 @@
 
 This repository packages [AIDotNet/lobe-chat](https://github.com/AIDotNet/lobe-chat) for YunoHost.
 
-The package keeps YunoHost-specific files in this repository and downloads Lobe Chat from a pinned upstream commit during install and upgrade. To follow upstream, update the source URL, checksum, and package version with:
+The package keeps YunoHost-specific files in this repository and builds Lobe Chat from a pinned upstream commit during install and upgrade. To follow upstream, update the pinned commit and package version with:
 
 ```bash
 tools/update-upstream
@@ -23,4 +23,4 @@ sudo yunohost app upgrade lobechat -u https://github.com/chudy34/lobechat_ynh
 
 ## Notes
 
-This first package version runs Lobe Chat in standalone Next.js mode without provisioning a server database. Provider keys can be configured in Lobe Chat; the installer also accepts an optional default OpenAI key.
+This package uses Docker CE + Compose v2 on the YunoHost server. Supporting services are managed by the package: PostgreSQL/ParadeDB, RustFS, Redis, and SearXNG.

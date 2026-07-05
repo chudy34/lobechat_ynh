@@ -3,23 +3,73 @@
 source _common.sh
 source /usr/share/yunohost/helpers
 
-ynh_script_progression "Stopping $app's systemd service..."
-ynh_systemctl --service="$app" --action="stop"
+#=================================================
+# LOAD SAVED SETTINGS
+#=================================================
+postgres_password=$(ynh_app_setting_get --app="$app" --key=postgres_password)
+rustfs_access_key=$(ynh_app_setting_get --app="$app" --key=rustfs_access_key)
+rustfs_secret_key=$(ynh_app_setting_get --app="$app" --key=rustfs_secret_key)
+key_vaults_secret=$(ynh_app_setting_get --app="$app" --key=key_vaults_secret)
+auth_secret=$(ynh_app_setting_get --app="$app" --key=auth_secret)
+searxng_secret=$(ynh_app_setting_get --app="$app" --key=searxng_secret)
+admin_email=$(ynh_app_setting_get --app="$app" --key=admin_email)
+admin_password=$(ynh_app_setting_get --app="$app" --key=admin_password)
 
-ynh_script_progression "Upgrading source files..."
-ynh_setup_source --dest_dir="$install_dir" --full_replace
+#=================================================
+# STOP SERVICE
+#=================================================
+ynh_script_progression --message="Stopping LobeHub..." --weight=2
+ynh_systemd_action --service_name="$app" --action="stop" --log_path=systemd --timeout=60
 
-ynh_script_progression "Rebuilding Lobe Chat..."
-build_lobechat
+#=================================================
+# ENSURE DOCKER CE IS INSTALLED
+#=================================================
+ynh_script_progression --message="Checking Docker CE..." --weight=5
+install_docker_ce
 
-ynh_script_progression "Upgrading Lobe Chat configuration..."
-configure_lobechat_env
-ynh_config_add_nginx
-ynh_config_add_systemd
-yunohost service add "$app" --description="Modern self-hosted AI chat interface" --log="journalctl -u $app"
-ynh_config_add_logrotate
+#=================================================
+# BUILD APP URL
+#=================================================
+if [ "$path" = "/" ]; then
+    APP_URL="https://${domain}"
+else
+    APP_URL="https://${domain}${path}"
+fi
 
-ynh_script_progression "Starting $app's systemd service..."
-ynh_systemctl --service="$app" --action="start"
+#=================================================
+# UPDATE DOCKER-COMPOSE
+#=================================================
+ynh_script_progression --message="Updating Docker Compose configuration..." --weight=1
 
-ynh_script_progression "Upgrade of $app completed"
+sed \
+    -e "s|__APP__|${app}|g" \
+    -e "s|__INSTALL_DIR__|${install_dir}|g" \
+    -e "s|__DATA_DIR__|${data_dir}|g" \
+    -e "s|__PORT__|${port}|g" \
+    -e "s|__PORT_RUSTFS_API__|${port_rustfs_api}|g" \
+    -e "s|__PORT_RUSTFS_CONSOLE__|${port_rustfs_console}|g" \
+    ../conf/docker-compose.yml > "$install_dir/docker-compose.yml"
+
+#=================================================
+# PULL LATEST IMAGES
+#=================================================
+ynh_script_progression --message="Pulling latest Docker images..." --weight=40
+
+cd "$install_dir"
+docker compose --project-name "$app" pull --ignore-buildable
+docker compose --project-name "$app" build --pull lobe
+
+#=================================================
+# UPDATE SYSTEMD + NGINX
+#=================================================
+ynh_script_progression --message="Updating systemd and nginx..." --weight=2
+ynh_add_systemd_config
+ynh_add_nginx_config
+
+#=================================================
+# RESTART
+#=================================================
+ynh_script_progression --message="Starting updated LobeHub..." --weight=10
+ynh_systemd_action --service_name="$app" --action="start" --log_path=systemd --timeout=300
+
+ynh_script_progression --message="LobeHub upgraded successfully!" --last

@@ -26,10 +26,12 @@ mkdir -p "$source_dir"
 tar -xzf "$archive" -C "$source_dir" --strip-components=1
 app_version="$(node -e 'console.log(require(process.argv[1]).version)' "$source_dir/package.json")"
 
+short_commit="${commit:0:12}"
+
 perl -0pi -e "s#version = \"[^\"]+\"#version = \"$app_version~ynh1\"#" manifest.toml
-perl -0pi -e "s#url = \"https://github.com/AIDotNet/lobe-chat/archive/[^\"]+\"#url = \"$url\"#" manifest.toml
-perl -0pi -e "s#sha256 = \"[a-f0-9]+\"#sha256 = \"$sha256\"#" manifest.toml
+perl -0pi -e "s#LOBE_IMAGE=\\\$\{app\}-lobe:[a-f0-9]+#LOBE_IMAGE=\\\$\{app\}-lobe:$short_commit#" scripts/install
+perl -0pi -e "s|LOBE_BUILD_CONTEXT=https://github.com/AIDotNet/lobe-chat.git\\#[a-f0-9]+|LOBE_BUILD_CONTEXT=https://github.com/AIDotNet/lobe-chat.git#$commit|" scripts/install
 perl -0pi -e "s#Commit: \`[a-f0-9]+\`#Commit: \`$commit\`#" README.md
 perl -0pi -e "s#Lobe Chat version: \`[^\`]+\`#Lobe Chat version: \`$app_version\`#" README.md
 
-echo "Updated to $repo@$commit ($app_version, sha256 $sha256)."
+echo "Updated to $repo@$commit ($app_version, archive sha256 $sha256)."

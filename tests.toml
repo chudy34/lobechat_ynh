@@ -1,0 +1,6 @@
+[default]
+args.domain  = "domain.tld"
+args.path    = "/"
+args.init_main_permission = "visitors"
+args.admin_email    = "admin@domain.tld"
+args.admin_password = "TestPassword123"
