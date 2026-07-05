@@ -1,16 +1,13 @@
 #!/bin/bash
 
-source _common.sh
+source "$(dirname "$0")/_common.sh"
 source /usr/share/yunohost/helpers
 
 #=================================================
-# STOP AND REMOVE CONTAINERS
+# STOP AND REMOVE CONTAINERS + IMAGES
 #=================================================
-ynh_script_progression --message="Stopping and removing Docker containers..." --weight=5
+ynh_script_progression --message="Stopping and removing Docker containers and images..." --weight=5
 
-if [ -f "$install_dir/docker-compose.yml" ]; then
-    cd "$install_dir"
-    docker compose --project-name "$app" down --remove-orphans --timeout 30 || true
-fi
+cleanup_docker_images
 
 ynh_script_progression --message="LobeHub removed." --last

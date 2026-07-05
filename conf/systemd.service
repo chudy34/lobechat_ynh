@@ -10,6 +10,7 @@ RemainAfterExit=yes
 User=root
 WorkingDirectory=__INSTALL_DIR__
 
+ExecStartPre=/bin/bash -c 'docker info >/dev/null 2>&1 || systemctl start docker'
 ExecStart=docker compose \
     --project-name __APP__ \
     --file __INSTALL_DIR__/docker-compose.yml \
@@ -25,7 +26,8 @@ ExecReload=docker compose \
     --file __INSTALL_DIR__/docker-compose.yml \
     up -d --remove-orphans
 
-RestartSec=10s
+Restart=on-failure
+RestartSec=15s
 TimeoutStartSec=300
 TimeoutStopSec=60
 

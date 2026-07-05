@@ -73,15 +73,22 @@ ENV_EOF
 write_bucket_policy() {
     cat > "$install_dir/bucket.config.json" << 'BUCKET_EOF'
 {
-  "Version": "2012-10-17",
+  "ID": "",
   "Statement": [
     {
+      "Sid": "",
       "Effect": "Allow",
-      "Principal": { "AWS": ["*"] },
+      "Principal": {
+        "AWS": ["*"]
+      },
       "Action": ["s3:GetObject"],
-      "Resource": ["arn:aws:s3:::lobe/*"]
+      "NotAction": [],
+      "Resource": ["arn:aws:s3:::lobe/*"],
+      "NotResource": [],
+      "Condition": {}
     }
-  ]
+  ],
+  "Version": "2012-10-17"
 }
 BUCKET_EOF
 
@@ -164,20 +171,15 @@ wait_for_lobehub() {
 }
 
 install_docker_ce() {
-    # Skip if docker compose v2 is already available
+    # Skip if docker compose v2 is already available (from any source)
     if docker compose version &>/dev/null 2>&1; then
-        ynh_print_info "Docker CE with Compose v2 already installed."
+        ynh_print_info "Docker Compose v2 already available: $(docker compose version --short)"
         return 0
     fi
 
     ynh_print_info "Installing Docker CE (official repo - provides Compose v2)..."
 
-    # Remove old conflicting packages
-    for pkg in docker.io docker-compose docker-doc podman-docker containerd runc; do
-        apt-get remove -y "$pkg" 2>/dev/null || true
-    done
-
-    # Add Docker's official GPG key
+    # Add Docker's official GPG key (do NOT remove existing packages — other YunoHost apps may depend on them)
     install -m 0755 -d /etc/apt/keyrings
     curl -fsSL https://download.docker.com/linux/debian/gpg \
         | gpg --dearmor -o /etc/apt/keyrings/docker.gpg
@@ -200,4 +202,54 @@ install_docker_ce() {
     # Verify
     docker compose version || ynh_die "Docker Compose v2 installation failed"
     ynh_print_info "Docker CE + Compose v2 installed: $(docker compose version)"
+}
+
+# Remove Docker images used by this app (called from remove script)
+cleanup_docker_images() {
+    local project="$app"
+    ynh_print_info "Removing Docker images for project $project..."
+
+    if [ -f "$install_dir/docker-compose.yml" ]; then
+        cd "$install_dir"
+        docker compose --project-name "$project" down --remove-orphans --volumes --timeout 30 || true
+        docker compose --project-name "$project" rm -f || true
+        # Remove images referenced in the compose file
+        docker images --filter "reference=lobehub/lobehub*" --format '{{.Repository}}:{{.Tag}}' | while read -r img; do
+            docker rmi "$img" 2>/dev/null || true
+        done
+        docker images --filter "reference=pgvector/pgvector*" --format '{{.Repository}}:{{.Tag}}' | while read -r img; do
+            docker rmi "$img" 2>/dev/null || true
+        done
+        docker images --filter "reference=redis:*-alpine" --format '{{.Repository}}:{{.Tag}}' | while read -r img; do
+            docker rmi "$img" 2>/dev/null || true
+        done
+        docker images --filter "reference=rustfs/rustfs*" --format '{{.Repository}}:{{.Tag}}' | while read -r img; do
+            docker rmi "$img" 2>/dev/null || true
+        done
+        docker images --filter "reference=minio/mc*" --format '{{.Repository}}:{{.Tag}}' | while read -r img; do
+            docker rmi "$img" 2>/dev/null || true
+        done
+        docker images --filter "reference=searxng/searxng*" --format '{{.Repository}}:{{.Tag}}' | while read -r img; do
+            docker rmi "$img" 2>/dev/null || true
+        done
+        docker image prune -f 2>/dev/null || true
+    fi
+}
+
+# Dump PostgreSQL database via docker exec (consistent backup)
+dump_postgres() {
+    local dump_file="$1"
+    ynh_print_info "Dumping PostgreSQL database..."
+    docker compose --project-name "$app" --file "$install_dir/docker-compose.yml" \
+        exec -T postgresql pg_dump -U postgres -d "$LOBE_DB_NAME" --clean --if-exists > "$dump_file" 2>/dev/null
+}
+
+# Restore PostgreSQL database from dump
+restore_postgres() {
+    local dump_file="$1"
+    if [ -f "$dump_file" ]; then
+        ynh_print_info "Restoring PostgreSQL database from dump..."
+        docker compose --project-name "$app" --file "$install_dir/docker-compose.yml" \
+            exec -T postgresql psql -U postgres -d "$LOBE_DB_NAME" < "$dump_file" 2>/dev/null || true
+    fi
 }

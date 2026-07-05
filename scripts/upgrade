@@ -1,6 +1,6 @@
 #!/bin/bash
 
-source _common.sh
+source "$(dirname "$0")/_common.sh"
 source /usr/share/yunohost/helpers
 
 #=================================================
@@ -13,7 +13,9 @@ key_vaults_secret=$(ynh_app_setting_get --app="$app" --key=key_vaults_secret)
 auth_secret=$(ynh_app_setting_get --app="$app" --key=auth_secret)
 searxng_secret=$(ynh_app_setting_get --app="$app" --key=searxng_secret)
 admin_email=$(ynh_app_setting_get --app="$app" --key=admin_email)
-admin_password=$(ynh_app_setting_get --app="$app" --key=admin_password)# Ensure all secrets are set (fallback for upgrades from older package revisions)
+admin_password=$(ynh_app_setting_get --app="$app" --key=admin_password)
+
+# Ensure all secrets are set (fallback for upgrades from older package revisions)
 if [ -z "$postgres_password" ]; then
     postgres_password=$(gen_password)
     ynh_app_setting_set --app="$app" --key=postgres_password --value="$postgres_password"
