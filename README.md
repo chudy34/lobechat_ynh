@@ -8,6 +8,8 @@ The package keeps YunoHost-specific files in this repository and runs the offici
 tools/update-upstream
 ```
 
+GitHub Actions also runs this updater every day and pushes a commit when a newer upstream release exists.
+
 Then test the package on a YunoHost server:
 
 ```bash

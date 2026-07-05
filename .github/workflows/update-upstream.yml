@@ -1,0 +1,43 @@
+name: Update LobeHub upstream
+
+on:
+  schedule:
+    - cron: "17 3 * * *"
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+concurrency:
+  group: update-upstream
+  cancel-in-progress: false
+
+jobs:
+  update:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout package
+        uses: actions/checkout@v4
+
+      - name: Update pinned LobeHub release
+        run: tools/update-upstream
+
+      - name: Check for changes
+        id: changes
+        run: |
+          if git diff --quiet; then
+            echo "changed=false" >> "$GITHUB_OUTPUT"
+          else
+            echo "changed=true" >> "$GITHUB_OUTPUT"
+          fi
+
+      - name: Commit and push update
+        if: steps.changes.outputs.changed == 'true'
+        run: |
+          version="$(grep '^version = ' manifest.toml | sed 's/version = "\(.*\)~ynh1"/\1/')"
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add README.md conf/docker-compose.yml manifest.toml
+          git commit -m "Update LobeHub to ${version}"
+          git push
