@@ -18,6 +18,9 @@ ynh_restore_file --origin_path="$install_dir"
 ynh_script_progression --message="Restoring data..." --weight=20
 ynh_restore_file --origin_path="$data_dir"
 
+ynh_script_progression --message="Repairing data permissions..." --weight=2
+prepare_data_dirs
+
 #=================================================
 # PULL IMAGES & START
 #=================================================
@@ -33,5 +36,8 @@ ynh_restore_file --origin_path="/etc/nginx/conf.d/$domain.d/$app.conf"
 
 ynh_script_progression --message="Starting restored LobeHub..." --weight=10
 ynh_systemd_action --service_name="$app" --action="start" --log_path=systemd --timeout=300
+
+ynh_script_progression --message="Waiting for LobeHub to be ready..." --weight=5
+wait_for_lobehub 600
 
 ynh_script_progression --message="Restore complete!" --last

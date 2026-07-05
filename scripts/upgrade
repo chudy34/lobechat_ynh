@@ -19,7 +19,7 @@ admin_password=$(ynh_app_setting_get --app="$app" --key=admin_password)
 # STOP SERVICE
 #=================================================
 ynh_script_progression --message="Stopping LobeHub..." --weight=2
-ynh_systemd_action --service_name="$app" --action="stop" --log_path=systemd --timeout=60
+ynh_systemd_action --service_name="$app" --action="stop" --log_path=systemd --timeout=60 || true
 
 #=================================================
 # ENSURE DOCKER CE IS INSTALLED
@@ -30,30 +30,27 @@ install_docker_ce
 #=================================================
 # BUILD APP URL
 #=================================================
-if [ "$path" = "/" ]; then
-    APP_URL="https://${domain}"
-else
-    APP_URL="https://${domain}${path}"
-fi
+build_app_url
 
 # Remove obsolete empty JWKS override from earlier package revisions.
 if [ -f "$install_dir/.env" ]; then
     sed -i '/^JWKS_KEY=/d' "$install_dir/.env"
 fi
 
+ynh_script_progression --message="Preparing data directories..." --weight=1
+prepare_data_dirs
+
+ynh_script_progression --message="Updating environment config..." --weight=1
+write_env_file
+
+ynh_script_progression --message="Updating RustFS bucket policy..." --weight=1
+write_bucket_policy
+
 #=================================================
 # UPDATE DOCKER-COMPOSE
 #=================================================
 ynh_script_progression --message="Updating Docker Compose configuration..." --weight=1
-
-sed \
-    -e "s|__APP__|${app}|g" \
-    -e "s|__INSTALL_DIR__|${install_dir}|g" \
-    -e "s|__DATA_DIR__|${data_dir}|g" \
-    -e "s|__PORT__|${port}|g" \
-    -e "s|__PORT_RUSTFS_API__|${port_rustfs_api}|g" \
-    -e "s|__PORT_RUSTFS_CONSOLE__|${port_rustfs_console}|g" \
-    ../conf/docker-compose.yml > "$install_dir/docker-compose.yml"
+write_compose_file
 
 #=================================================
 # PULL LATEST IMAGES
@@ -75,5 +72,8 @@ ynh_add_nginx_config
 #=================================================
 ynh_script_progression --message="Starting updated LobeHub..." --weight=10
 ynh_systemd_action --service_name="$app" --action="start" --log_path=systemd --timeout=300
+
+ynh_script_progression --message="Waiting for LobeHub to be ready..." --weight=5
+wait_for_lobehub 600
 
 ynh_script_progression --message="LobeHub upgraded successfully!" --last
