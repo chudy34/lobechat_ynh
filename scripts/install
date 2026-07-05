@@ -188,7 +188,7 @@ ynh_add_nginx_config
 #=================================================
 # START STACK
 #=================================================
-ynh_script_progression --message="Starting LobeHub stack (first start may take 2-3 minutes)..." --weight=15
+ynh_script_progression --message="Starting LobeHub stack (first start may take up to 10 minutes)..." --weight=15
 ynh_systemd_action --service_name="$app" --action="start" --log_path=systemd --timeout=300
 
 #=================================================
@@ -197,7 +197,7 @@ ynh_systemd_action --service_name="$app" --action="start" --log_path=systemd --t
 ynh_script_progression --message="Waiting for LobeHub to be ready..." --weight=5
 
 elapsed=0
-max_wait=180
+max_wait=600
 while [ $elapsed -lt $max_wait ]; do
     if curl -sf "http://127.0.0.1:${port}/" &>/dev/null; then
         ynh_print_info "LobeHub is up and running."
