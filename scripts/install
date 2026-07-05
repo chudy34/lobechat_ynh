@@ -96,13 +96,18 @@ ynh_script_progression --message="Starting LobeHub stack (first start may take u
 # Use "restart" instead of "start": with Type=oneshot + RemainAfterExit=yes,
 # systemd keeps the unit in "active (exited)" state after a previous run, so
 # "start" becomes a no-op. "restart" forces ExecStop + ExecStart again.
-ynh_systemd_action --service_name="$app" --action="restart" --log_path=systemd --timeout=300
+# We call systemctl directly (not ynh_systemd_action) so that a non-zero exit
+# from "docker compose up -d" (e.g. a dependency still warming up) does NOT
+# abort the install before wait_for_lobehub can collect diagnostics.
+systemctl restart "$app" || true
+# Give compose a moment to spin up containers before polling
+sleep 5
 
 #=================================================
 # HEALTH CHECK
 #=================================================
 ynh_script_progression --message="Waiting for LobeHub to be ready..." --weight=5
-wait_for_lobehub 600
+wait_for_lobehub 900
 
 #=================================================
 # DONE

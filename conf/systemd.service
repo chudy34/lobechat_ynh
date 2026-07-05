@@ -33,7 +33,7 @@ ExecReload=docker compose \
 # stopped. The YunoHost install/upgrade scripts handle restart explicitly.
 
 RestartSec=15s
-TimeoutStartSec=300
+TimeoutStartSec=600
 TimeoutStopSec=60
 
 StandardOutput=journal
