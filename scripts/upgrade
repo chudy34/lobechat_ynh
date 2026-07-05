@@ -56,8 +56,7 @@ sed \
 ynh_script_progression --message="Pulling latest Docker images..." --weight=40
 
 cd "$install_dir"
-docker compose --project-name "$app" pull --ignore-buildable
-docker compose --project-name "$app" build --pull lobe
+docker compose --project-name "$app" pull
 
 #=================================================
 # UPDATE SYSTEMD + NGINX

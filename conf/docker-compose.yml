@@ -1,5 +1,5 @@
-# Lobe Chat — YunoHost deployment
-# App source: https://github.com/AIDotNet/lobe-chat
+# LobeHub — YunoHost deployment
+# App source: https://github.com/lobehub/lobehub
 # Requires: docker compose v2 (Docker CE)
 # Tuned for: 4 vCPU / 8 GB RAM / 75 GB NVMe
 
@@ -127,11 +127,9 @@ services:
     networks:
       - lobe-network
 
-  # ── Lobe Chat ─────────────────────────────────────────────────────────────
+  # ── LobeHub ───────────────────────────────────────────────────────────────
   lobe:
-    image: ${LOBE_IMAGE}
-    build:
-      context: ${LOBE_BUILD_CONTEXT}
+    image: lobehub/lobehub:v2.2.9
     container_name: __APP__-lobe
     network_mode: "service:network-service"
     restart: always

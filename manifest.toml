@@ -3,20 +3,20 @@
 packaging_format = 2
 
 id = "lobechat"
-name = "Lobe Chat"
-description.en = "Self-hosted AI chat interface with multiple model providers"
-description.fr = "Interface de discussion IA auto-hébergée avec plusieurs fournisseurs"
+name = "LobeHub"
+description.en = "Self-hosted AI workspace with multiple model providers"
+description.fr = "Espace de travail IA auto-hébergé avec plusieurs fournisseurs"
 
-version = "1.11.9~ynh1"
+version = "2.2.9~ynh1"
 
 maintainers = ["chudy34"]
 
 [upstream]
 license    = "MIT"
-website    = "https://lobechat.com"
+website    = "https://lobehub.com"
 admindoc   = "https://lobehub.com/docs/self-hosting/platform/docker-compose"
 userdoc    = "https://lobehub.com/docs"
-code       = "https://github.com/AIDotNet/lobe-chat"
+code       = "https://github.com/lobehub/lobehub"
 
 [integration]
 yunohost      = ">= 11.2"

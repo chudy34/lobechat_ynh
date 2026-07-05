@@ -1,8 +1,8 @@
-# Lobe Chat for YunoHost
+# LobeHub for YunoHost
 
-This repository packages [AIDotNet/lobe-chat](https://github.com/AIDotNet/lobe-chat) for YunoHost.
+This repository packages [lobehub/lobehub](https://github.com/lobehub/lobehub) for YunoHost.
 
-The package keeps YunoHost-specific files in this repository and builds Lobe Chat from a pinned upstream commit during install and upgrade. To follow upstream, update the pinned commit and package version with:
+The package keeps YunoHost-specific files in this repository and runs the official LobeHub Docker image pinned to the current upstream release. To follow upstream, update the pinned Docker image tag and package version with:
 
 ```bash
 tools/update-upstream
@@ -17,9 +17,10 @@ sudo yunohost app upgrade lobechat -u https://github.com/chudy34/lobechat_ynh
 
 ## Current upstream
 
-- Repository: `https://github.com/AIDotNet/lobe-chat`
-- Commit: `d8950b27eaef10bdff72da894c8190a87a82a972`
-- Lobe Chat version: `1.11.9`
+- Repository: `https://github.com/lobehub/lobehub`
+- Release: `v2.2.9`
+- Docker image: `lobehub/lobehub:v2.2.9`
+- LobeHub version: `2.2.9`
 
 ## Notes
 

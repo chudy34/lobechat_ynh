@@ -1,4 +1,4 @@
-Lobe Chat is a self-hosted AI chat interface packaged for YunoHost.
+LobeHub is a self-hosted AI workspace packaged for YunoHost.
 
 **Features:**
 - Multiple LLM providers (OpenAI, Claude, Gemini, DeepSeek, Ollama, ...)
@@ -9,4 +9,4 @@ Lobe Chat is a self-hosted AI chat interface packaged for YunoHost.
 - File storage (RustFS S3)
 - Multi-user with NextAuth
 
-**Stack:** Lobe Chat from AIDotNet/lobe-chat + ParadeDB (PostgreSQL 17 + pgvector) + RustFS + Redis + SearXNG
+**Stack:** LobeHub from lobehub/lobehub + ParadeDB (PostgreSQL 17 + pgvector) + RustFS + Redis + SearXNG
