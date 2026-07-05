@@ -5,20 +5,6 @@
 
 services:
 
-  # ── Shared network namespace ──────────────────────────────────────────────
-  # rustfs + lobe share ports through this container's network
-  network-service:
-    image: alpine:latest
-    container_name: __APP__-network
-    restart: always
-    ports:
-      - "127.0.0.1:__PORT_RUSTFS_API__:9000"    # RustFS S3 API → nginx /s3/
-      - "127.0.0.1:__PORT_RUSTFS_CONSOLE__:9001" # RustFS Console
-      - "127.0.0.1:__PORT__:3210"                # LobeHub app
-    command: tail -f /dev/null
-    networks:
-      - lobe-network
-
   # ── PostgreSQL (ParadeDB) ─────────────────────────────────────────────────
   # ParadeDB = PostgreSQL 17 + pgvector + pg_search
   # Required for Knowledge Base (RAG) and full-text search
@@ -29,6 +15,7 @@ services:
     # Internal only — no host port binding (avoids conflict with host postgresql)
     volumes:
       - __DATA_DIR__/postgres:/var/lib/postgresql/data
+    command: ["postgres", "-c", "shared_preload_libraries=pg_search"]
     environment:
       POSTGRES_DB:       ${LOBE_DB_NAME}
       POSTGRES_PASSWORD: ${POSTGRES_PASSWORD}
@@ -68,12 +55,13 @@ services:
 
   # ── RustFS ───────────────────────────────────────────────────────────────
   # S3-compatible object storage — replaces MinIO in LobeHub v2
-  # Shares port 9000/9001 through network-service
   rustfs:
     image: rustfs/rustfs:latest
     container_name: __APP__-rustfs
-    network_mode: "service:network-service"
     restart: always
+    ports:
+      - "127.0.0.1:__PORT_RUSTFS_API__:9000"
+      - "127.0.0.1:__PORT_RUSTFS_CONSOLE__:9001"
     environment:
       RUSTFS_CONSOLE_ENABLE: "true"
       RUSTFS_ACCESS_KEY:     ${RUSTFS_ACCESS_KEY}
@@ -92,13 +80,14 @@ services:
       - "--secret-key"
       - "${RUSTFS_SECRET_KEY}"
       - "/data"
+    networks:
+      - lobe-network
 
   # ── RustFS Init ───────────────────────────────────────────────────────────
   # One-shot: creates the lobe bucket with public-read policy, then exits
   rustfs-init:
     image: minio/mc:latest
     container_name: __APP__-rustfs-init
-    network_mode: "service:network-service"
     restart: "no"
     depends_on:
       rustfs:
@@ -109,11 +98,13 @@ services:
     command: >
       -c '
         set -eux;
-        mc alias set rustfs "http://localhost:9000" "${RUSTFS_ACCESS_KEY}" "${RUSTFS_SECRET_KEY}";
+        mc alias set rustfs "http://rustfs:9000" "${RUSTFS_ACCESS_KEY}" "${RUSTFS_SECRET_KEY}";
         mc mb "rustfs/lobe" --ignore-existing;
         mc anonymous set-json "/bucket.config.json" "rustfs/lobe";
         echo "RustFS bucket ready."
       '
+    networks:
+      - lobe-network
 
   # ── SearXNG ───────────────────────────────────────────────────────────────
   searxng:
@@ -131,13 +122,12 @@ services:
   lobe:
     image: lobehub/lobehub:2.2.9
     container_name: __APP__-lobe
-    network_mode: "service:network-service"
     restart: always
+    ports:
+      - "127.0.0.1:__PORT__:3210"
     depends_on:
       postgresql:
         condition: service_healthy
-      network-service:
-        condition: service_started
       rustfs:
         condition: service_healthy
       rustfs-init:
@@ -152,10 +142,11 @@ services:
 
       # Database
       DATABASE_URL: postgresql://postgres:${POSTGRES_PASSWORD}@postgresql:5432/${LOBE_DB_NAME}
+      INTERNAL_APP_URL: http://localhost:3210
 
-      # S3 / RustFS — internal endpoint via shared network namespace
+      # S3 / RustFS
       S3_BUCKET:           ${RUSTFS_LOBE_BUCKET}
-      S3_ENDPOINT:         http://localhost:9000
+      S3_ENDPOINT:         http://rustfs:9000
       S3_ACCESS_KEY:       ${RUSTFS_ACCESS_KEY}
       S3_ACCESS_KEY_ID:    ${RUSTFS_ACCESS_KEY}
       S3_SECRET_ACCESS_KEY: ${RUSTFS_SECRET_KEY}
@@ -180,6 +171,8 @@ services:
       LLM_VISION_IMAGE_USE_BASE64: "1"
     env_file:
       - .env
+    networks:
+      - lobe-network
 
 networks:
   lobe-network:

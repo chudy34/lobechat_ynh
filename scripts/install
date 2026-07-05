@@ -218,7 +218,7 @@ while [ $elapsed -lt $max_wait ]; do
 done
 
 if [ $elapsed -ge $max_wait ]; then
-    ynh_print_warn "Health check timed out — service may still be initializing. Check: journalctl -u $app"
+    ynh_die "Health check timed out. Check: journalctl -u $app and docker logs $app-lobe"
 fi
 
 #=================================================
