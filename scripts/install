@@ -208,8 +208,9 @@ while [ $elapsed -lt $max_wait ]; do
 done
 
 if [ $elapsed -ge $max_wait ]; then
-    docker compose --project-name "$app" ps || true
+    docker compose --project-name "$app" ps -a || true
     docker logs --tail=200 "$app-lobe" || true
+    docker logs --tail=200 "$app-rustfs-init" || true
     ynh_die "Health check timed out. Check: journalctl -u $app and docker logs $app-lobe"
 fi
 
