@@ -9,4 +9,4 @@ LobeHub is a self-hosted AI workspace packaged for YunoHost.
 - File storage (RustFS S3)
 - Multi-user with NextAuth
 
-**Stack:** LobeHub from lobehub/lobehub + PostgreSQL 17 (pgvector) + RustFS + Redis + SearXNG
+**Stack:** LobeHub from lobehub/lobehub + ParadeDB (PostgreSQL 17 + pgvector + pg_search) + RustFS + Redis + SearXNG

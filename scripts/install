@@ -44,8 +44,6 @@ ynh_script_progression --message="Preparing data directories..." --weight=1
 prepare_data_dirs
 # On a fresh install, wipe any stale PostgreSQL data from a previous
 # failed attempt so initdb runs with the freshly generated password.
-# Also handles the ParadeDB-era pg_search preload library case.
-clean_postgres_data_dir
 clean_postgres_data_dir_install
 
 #=================================================

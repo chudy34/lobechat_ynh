@@ -5,15 +5,22 @@
 
 services:
 
-  # ── PostgreSQL (pgvector) ─────────────────────────────────────────────────
-  # Required for Knowledge Base (RAG) and full-text search
+  # ── PostgreSQL (ParadeDB) ─────────────────────────────────────────────────
+  # ParadeDB = PostgreSQL 17 + pgvector + pg_search (full-text search)
+  # LobeHub v2.x runs 'CREATE EXTENSION IF NOT EXISTS pg_search' during DB
+  # migration, so the pg_search extension MUST be available. The plain
+  # pgvector/pgvector image does NOT ship pg_search and LobeHub crashes
+  # with 'extension "pg_search" is not available' (0A000). We therefore
+  # follow the upstream docker-compose and use paradedb/paradedb:latest-pg17
+  # with shared_preload_libraries=pg_search.
   postgresql:
-    image: pgvector/pgvector:pg17
+    image: paradedb/paradedb:latest-pg17
     container_name: __APP__-postgres
     restart: always
     # Internal only — no host port binding (avoids conflict with host postgresql)
     volumes:
       - __DATA_DIR__/postgres:/var/lib/postgresql/data
+    command: ["postgres", "-c", "shared_preload_libraries=pg_search"]
     environment:
       POSTGRES_DB:       ${LOBE_DB_NAME}
       POSTGRES_PASSWORD: ${POSTGRES_PASSWORD}
