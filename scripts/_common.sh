@@ -180,19 +180,19 @@ wait_for_lobehub() {
 
     # Health check failed — gather diagnostics
     ynh_print_warn "LobeHub did not respond on port ${port} within ${max_wait}s."
-    ynh_print_warn "--- systemctl status $app ---"
+    ynh_print_warn "=== systemctl status $app ==="
     systemctl status "$app" --no-pager || true
-    ynh_print_warn "--- journalctl (last 200 lines) ---"
+    ynh_print_warn "=== journalctl (last 200 lines) ==="
     journalctl -u "$app" -n 200 --no-pager || true
-    ynh_print_warn "--- docker compose ps -a ---"
+    ynh_print_warn "=== docker compose ps -a ==="
     docker compose --project-name "$app" --file "$install_dir/docker-compose.yml" ps -a || true
-    ynh_print_warn "--- docker logs (postgresql) ---"
+    ynh_print_warn "=== docker logs (postgresql) ==="
     docker compose --project-name "$app" --file "$install_dir/docker-compose.yml" logs --tail=200 postgresql 2>&1 || \
         docker logs --tail=200 "${app}-postgres" 2>&1 || true
-    ynh_print_warn "--- docker logs (lobe) ---"
+    ynh_print_warn "=== docker logs (lobe) ==="
     docker compose --project-name "$app" --file "$install_dir/docker-compose.yml" logs --tail=200 lobe 2>&1 || \
         docker logs --tail=200 "${app}-lobe" 2>&1 || true
-    ynh_print_warn "--- docker logs (rustfs-init) ---"
+    ynh_print_warn "=== docker logs (rustfs-init) ==="
     docker compose --project-name "$app" --file "$install_dir/docker-compose.yml" logs --tail=200 rustfs-init 2>&1 || \
         docker logs --tail=200 "${app}-rustfs-init" 2>&1 || true
     ynh_die "Health check timed out. Check: journalctl -u $app and docker compose logs"
