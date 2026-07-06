@@ -114,9 +114,16 @@ ENV_EOF
 }
 
 write_bucket_policy() {
+    # NOTE: mc (MinIO client, used by rustfs-init) validates the policy
+    # schema and rejects the upstream LobeHub bucket.config.json because
+    # it uses "ID" (uppercase). mc expects "Id" (camelCase) per the AWS
+    # S3 policy spec. Without this fix rustfs-init fails with:
+    #   parse policy failed Error("unknown field `ID`, expected one of
+    #   `Id`, `Version`, `Statement`", line: 2, column: 6)
     cat > "$install_dir/bucket.config.json" << 'BUCKET_EOF'
 {
-  "ID": "",
+  "Id": "",
+  "Version": "2012-10-17",
   "Statement": [
     {
       "Sid": "",
@@ -125,13 +132,9 @@ write_bucket_policy() {
         "AWS": ["*"]
       },
       "Action": ["s3:GetObject"],
-      "NotAction": [],
-      "Resource": ["arn:aws:s3:::lobe/*"],
-      "NotResource": [],
-      "Condition": {}
+      "Resource": ["arn:aws:s3:::lobe/*"]
     }
-  ],
-  "Version": "2012-10-17"
+  ]
 }
 BUCKET_EOF
 
