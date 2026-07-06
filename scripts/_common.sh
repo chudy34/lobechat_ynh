@@ -171,19 +171,44 @@ write_compose_file() {
 
 wait_for_lobehub() {
     local elapsed=0
-    local max_wait="${1:-600}"
+    local max_wait="${1:-900}"
+    local last_state=""
 
     while [ "$elapsed" -lt "$max_wait" ]; do
         if curl -sf "http://127.0.0.1:${port}/" >/dev/null 2>&1; then
             ynh_print_info "LobeHub is up and running."
             return 0
         fi
+
+        # Early failure detection: inspect container states every ~30s.
+        # If a dependency is clearly broken, abort now instead of waiting
+        # the full timeout — the diagnostic output is what we actually
+        # need to fix the problem, not the 15-minute wait.
+        if [ $((elapsed % 30)) -eq 0 ] && [ "$elapsed" -gt 0 ]; then
+            local lobe_state
+            lobe_state=$(docker inspect --format='{{.State.Status}}' "${app}-lobe" 2>/dev/null || echo "missing")
+            local pg_state
+            pg_state=$(docker inspect --format='{{.State.Status}}' "${app}-postgres" 2>/dev/null || echo "missing")
+
+            # If lobe is restarting in a loop or has exited, it will never
+            # become ready on its own — collect diagnostics and bail.
+            if [ "$lobe_state" = "exited" ] || [ "$lobe_state" = "restarting" ]; then
+                ynh_print_warn "lobe container is '$lobe_state' after ${elapsed}s — aborting wait early."
+                break
+            fi
+            # If postgres is down/unhealthy, lobe can never connect.
+            if [ "$pg_state" != "running" ] && [ "$pg_state" != "missing" ]; then
+                ynh_print_warn "postgres container is '$pg_state' after ${elapsed}s — aborting wait early."
+                break
+            fi
+        fi
+
         sleep 5
         elapsed=$((elapsed + 5))
     done
 
     # Health check failed — gather diagnostics
-    ynh_print_warn "LobeHub did not respond on port ${port} within ${max_wait}s."
+    ynh_print_warn "LobeHub did not respond on port ${port} within ${max_wait}s (elapsed: ${elapsed}s)."
     ynh_print_warn "=== systemctl status $app ==="
     systemctl status "$app" --no-pager || true
     ynh_print_warn "=== journalctl (last 200 lines) ==="
