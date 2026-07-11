@@ -20,9 +20,9 @@ sudo yunohost app upgrade lobehub -u https://github.com/chudy34/lobechat_ynh
 ## Current upstream
 
 - Repository: `https://github.com/lobehub/lobehub`
-- Release: `v2.2.9`
-- Docker image: `lobehub/lobehub:2.2.9`
-- LobeHub version: `2.2.9`
+- Release: `v2.2.10`
+- Docker image: `lobehub/lobehub:2.2.10`
+- LobeHub version: `2.2.10`
 
 ## Notes
 

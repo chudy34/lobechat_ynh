@@ -7,7 +7,7 @@ name = "LobeHub"
 description.en = "Self-hosted AI workspace with multiple model providers"
 description.fr = "Espace de travail IA auto-hébergé avec plusieurs fournisseurs"
 
-version = "2.2.9~ynh1"
+version = "2.2.10~ynh1"
 
 maintainers = ["chudy34"]
 
