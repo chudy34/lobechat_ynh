@@ -1,10 +1,7 @@
 #!/bin/bash
 # LobeHub - shared helpers
 
-COMPOSE_PROJECT="lobehub_${app}"
-
-# Docker Compose v2 binary path (installed via Docker CE official repo)
-DOCKER_COMPOSE="docker compose"
+LOBE_DB_NAME="${LOBE_DB_NAME:-lobehub}"
 
 gen_password() { openssl rand -base64 24 | tr -dc 'A-Za-z0-9' | head -c 28; }
 gen_secret()   { openssl rand -hex 16; }
@@ -48,7 +45,7 @@ clean_postgres_data_dir_install() {
         ynh_print_warn "Found existing PostgreSQL data from a previous attempt — wiping so initdb uses the current password."
         systemctl stop "$app" 2>/dev/null || true
         docker compose --project-name "$app" --file "$install_dir/docker-compose.yml" down --timeout 30 2>/dev/null || true
-        rm -rf "$pg_dir"/*
+        rm -rf -- "${pg_dir:?}/"*
         chown -R 999:999 "$pg_dir"
         chmod 700 "$pg_dir"
     fi
@@ -172,8 +169,6 @@ write_compose_file() {
 wait_for_lobehub() {
     local elapsed=0
     local max_wait="${1:-900}"
-    local last_state=""
-
     while [ "$elapsed" -lt "$max_wait" ]; do
         if curl -sf "http://127.0.0.1:${port}/" >/dev/null 2>&1; then
             ynh_print_info "LobeHub is up and running."
@@ -267,7 +262,7 @@ cleanup_docker_images() {
     ynh_print_info "Removing Docker images for project $project..."
 
     if [ -f "$install_dir/docker-compose.yml" ]; then
-        cd "$install_dir"
+        cd "$install_dir" || return 1
         docker compose --project-name "$project" down --remove-orphans --volumes --timeout 30 || true
         docker compose --project-name "$project" rm -f || true
         # Remove images referenced in the compose file
@@ -296,17 +291,37 @@ cleanup_docker_images() {
 # Dump PostgreSQL database via docker exec (consistent backup)
 dump_postgres() {
     local dump_file="$1"
+    local temporary_dump="${dump_file}.tmp"
+
     ynh_print_info "Dumping PostgreSQL database..."
-    docker compose --project-name "$app" --file "$install_dir/docker-compose.yml" \
-        exec -T postgresql pg_dump -U postgres -d "$LOBE_DB_NAME" --clean --if-exists > "$dump_file" 2>/dev/null
+    if ! docker compose --project-name "$app" --file "$install_dir/docker-compose.yml" \
+        exec -T postgresql pg_dump -U postgres -d "$LOBE_DB_NAME" --clean --if-exists \
+        > "$temporary_dump" 2>/dev/null; then
+        rm -f "$temporary_dump"
+        ynh_print_err "PostgreSQL dump failed."
+        return 1
+    fi
+
+    if [ ! -s "$temporary_dump" ]; then
+        rm -f "$temporary_dump"
+        ynh_print_err "PostgreSQL dump is empty."
+        return 1
+    fi
+
+    mv "$temporary_dump" "$dump_file"
 }
 
 # Restore PostgreSQL database from dump
 restore_postgres() {
     local dump_file="$1"
-    if [ -f "$dump_file" ]; then
-        ynh_print_info "Restoring PostgreSQL database from dump..."
-        docker compose --project-name "$app" --file "$install_dir/docker-compose.yml" \
-            exec -T postgresql psql -U postgres -d "$LOBE_DB_NAME" < "$dump_file" 2>/dev/null || true
+
+    if [ ! -s "$dump_file" ]; then
+        ynh_print_err "PostgreSQL dump is missing or empty: $dump_file"
+        return 1
     fi
+
+    ynh_print_info "Restoring PostgreSQL database from dump..."
+    docker compose --project-name "$app" --file "$install_dir/docker-compose.yml" \
+        exec -T postgresql psql -v ON_ERROR_STOP=1 -U postgres -d "$LOBE_DB_NAME" \
+        < "$dump_file"
 }

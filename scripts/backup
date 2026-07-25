@@ -3,7 +3,33 @@
 source "$(dirname "$0")/_common.sh"
 source /usr/share/yunohost/helpers
 
-ynh_script_progression --message="Stopping stack for consistent backup..." --weight=2
+restart_required=0
+
+restart_stack_after_backup() {
+    if [ "$restart_required" -eq 1 ]; then
+        ynh_print_info "Restarting stack after backup..."
+        # The systemd unit may still be "active (exited)" when only the lobe
+        # container was stopped, so start would be a no-op. Restart handles
+        # both that state and a fully stopped stack.
+        systemctl restart "$app" || true
+    fi
+}
+
+trap restart_stack_after_backup EXIT
+
+ynh_script_progression --message="Pausing LobeHub writes..." --weight=2
+# Keep PostgreSQL running for pg_dump, but stop the application first so the
+# database and object-storage snapshots represent the same write boundary.
+restart_required=1
+docker compose --project-name "$app" --file "$install_dir/docker-compose.yml" \
+    stop --timeout 60 lobe
+
+ynh_script_progression --message="Backing up PostgreSQL dump..." --weight=5
+# pg_dump must run while the PostgreSQL container is still running.
+mkdir -p "$data_dir/backups"
+dump_postgres "$data_dir/backups/postgres_dump.sql"
+
+ynh_script_progression --message="Stopping stack for consistent file backup..." --weight=2
 ynh_systemd_action --service_name="$app" --action="stop" --log_path=systemd --timeout=60
 
 #=================================================
@@ -12,10 +38,7 @@ ynh_systemd_action --service_name="$app" --action="stop" --log_path=systemd --ti
 ynh_script_progression --message="Backing up install dir..." --weight=5
 ynh_backup --src_path="$install_dir"
 
-ynh_script_progression --message="Backing up PostgreSQL dump..." --weight=5
-# Dump PostgreSQL database via docker exec (cleaner than raw file copy)
-mkdir -p "$data_dir/backups"
-dump_postgres "$data_dir/backups/postgres_dump.sql" || true
+ynh_script_progression --message="Archiving PostgreSQL dump..." --weight=2
 ynh_backup --src_path="$data_dir/backups"
 
 ynh_script_progression --message="Backing up remaining data (redis, rustfs, searxng)..." --weight=15
@@ -32,6 +55,8 @@ ynh_backup --src_path="/etc/nginx/conf.d/$domain.d/$app.conf"
 # RESTART AFTER BACKUP
 #=================================================
 ynh_systemd_action --service_name="$app" --action="start" --log_path=systemd --timeout=300
+restart_required=0
+trap - EXIT
 wait_for_lobehub 600
 
 ynh_script_progression --message="Backup complete." --last

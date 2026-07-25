@@ -91,7 +91,7 @@ write_compose_file
 #=================================================
 ynh_script_progression --message="Pulling latest Docker images..." --weight=40
 
-cd "$install_dir"
+cd "$install_dir" || ynh_die "Unable to enter install directory: $install_dir"
 docker compose --project-name "$app" pull
 
 #=================================================
