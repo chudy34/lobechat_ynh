@@ -6,6 +6,60 @@ LOBE_DB_NAME="${LOBE_DB_NAME:-lobehub}"
 gen_password() { openssl rand -base64 24 | tr -dc 'A-Za-z0-9' | head -c 28; }
 gen_secret()   { openssl rand -hex 16; }
 
+ensure_jwks_key() {
+    local lobe_image
+    local xtrace_was_enabled=0
+
+    # JWKS_KEY contains an RSA private key. Disable xtrace while generating and
+    # persisting it so debug logs cannot expose the key.
+    case "$-" in
+        *x*)
+            xtrace_was_enabled=1
+            set +x
+            ;;
+    esac
+
+    if [ -n "${jwks_key:-}" ]; then
+        # Persist keys migrated from an existing .env file.
+        ynh_app_setting_set --app="$app" --key=jwks_key --value="$jwks_key"
+        [ "$xtrace_was_enabled" -eq 1 ] && set -x
+        return 0
+    fi
+
+    lobe_image=$(docker compose --project-name "$app" --file "$install_dir/docker-compose.yml" \
+        config --images | grep '^lobehub/lobehub:' | head -n 1)
+    if [ -z "$lobe_image" ]; then
+        [ "$xtrace_was_enabled" -eq 1 ] && set -x
+        ynh_die "Unable to determine the LobeHub image used to generate JWKS_KEY."
+    fi
+
+    jwks_key=$(docker run --rm --entrypoint node "$lobe_image" -e '
+const crypto = require("node:crypto");
+const { privateKey } = crypto.generateKeyPairSync("rsa", {
+  modulusLength: 2048,
+  publicExponent: 0x10001,
+});
+const jwk = privateKey.export({ format: "jwk" });
+jwk.use = "sig";
+jwk.kid = crypto.randomBytes(8).toString("hex");
+jwk.alg = "RS256";
+process.stdout.write(JSON.stringify({ keys: [jwk] }));
+')
+
+    if [ -z "$jwks_key" ]; then
+        [ "$xtrace_was_enabled" -eq 1 ] && set -x
+        ynh_die "JWKS_KEY generation returned an empty value."
+    fi
+
+    ynh_app_setting_set --app="$app" --key=jwks_key --value="$jwks_key"
+
+    if [ "$xtrace_was_enabled" -eq 1 ]; then
+        set -x
+    fi
+
+    ynh_print_info "Generated and securely stored the OIDC signing key."
+}
+
 build_app_url() {
     if [ "$path" = "/" ]; then
         APP_URL="https://${domain}"
@@ -68,6 +122,7 @@ POSTGRES_PASSWORD=${postgres_password}
 # Auth / Security
 KEY_VAULTS_SECRET=${key_vaults_secret}
 AUTH_SECRET=${auth_secret}
+JWKS_KEY='${jwks_key}'
 
 # S3 / RustFS
 RUSTFS_ACCESS_KEY=${rustfs_access_key}

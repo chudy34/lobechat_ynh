@@ -15,6 +15,31 @@ searxng_secret=$(ynh_app_setting_get --app="$app" --key=searxng_secret)
 admin_email=$(ynh_app_setting_get --app="$app" --key=admin_email)
 admin_password=$(ynh_app_setting_get --app="$app" --key=admin_password)
 
+# Load the persisted OIDC signing key. Packages prior to ~ynh4 could have a
+# manually configured JWKS_KEY or legacy OIDC_JWKS_KEY only in .env, so migrate
+# either spelling before write_env_file replaces that file.
+xtrace_was_enabled=0
+case "$-" in
+    *x*)
+        xtrace_was_enabled=1
+        set +x
+        ;;
+esac
+jwks_key=$(ynh_app_setting_get --app="$app" --key=jwks_key)
+if [ -z "$jwks_key" ] && [ -f "$install_dir/.env" ]; then
+    jwks_key=$(sed -n \
+        -e 's/^JWKS_KEY=//p' \
+        -e 's/^OIDC_JWKS_KEY=//p' \
+        "$install_dir/.env" | head -n 1)
+    jwks_key="${jwks_key#\'}"
+    jwks_key="${jwks_key%\'}"
+    jwks_key="${jwks_key#\"}"
+    jwks_key="${jwks_key%\"}"
+fi
+if [ "$xtrace_was_enabled" -eq 1 ]; then
+    set -x
+fi
+
 # Ensure all secrets are set (fallback for upgrades from older package revisions)
 if [ -z "$postgres_password" ]; then
     postgres_password=$(gen_password)
@@ -59,16 +84,8 @@ install_docker_ce
 #=================================================
 build_app_url
 
-# Remove obsolete empty JWKS override from earlier package revisions.
-if [ -f "$install_dir/.env" ]; then
-    sed -i '/^JWKS_KEY=/d' "$install_dir/.env"
-fi
-
 ynh_script_progression --message="Preparing data directories..." --weight=1
 prepare_data_dirs
-
-ynh_script_progression --message="Updating environment config..." --weight=1
-write_env_file
 
 ynh_script_progression --message="Updating RustFS bucket policy..." --weight=1
 write_bucket_policy
@@ -93,6 +110,12 @@ ynh_script_progression --message="Pulling latest Docker images..." --weight=40
 
 cd "$install_dir" || ynh_die "Unable to enter install directory: $install_dir"
 docker compose --project-name "$app" pull
+
+ynh_script_progression --message="Configuring OIDC signing key..." --weight=1
+ensure_jwks_key
+
+ynh_script_progression --message="Updating environment config..." --weight=1
+write_env_file
 
 #=================================================
 # UPDATE SYSTEMD + NGINX
