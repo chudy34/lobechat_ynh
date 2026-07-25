@@ -16,10 +16,13 @@ ynh_script_progression --message="Restoring install dir..." --weight=5
 ynh_restore_file --origin_path="$install_dir"
 
 ynh_script_progression --message="Restoring data..." --weight=20
-ynh_restore_file --origin_path="$data_dir/backups"
-ynh_restore_file --origin_path="$data_dir/redis"
-ynh_restore_file --origin_path="$data_dir/rustfs"
-ynh_restore_file --origin_path="$data_dir/searxng"
+# YunoHost intentionally omits data_dir from pre-upgrade safety archives.
+# During rollback that directory remains in place, while a regular full backup
+# does contain these entries. Accept both cases.
+ynh_restore_file --origin_path="$data_dir/backups" --not_mandatory
+ynh_restore_file --origin_path="$data_dir/redis" --not_mandatory
+ynh_restore_file --origin_path="$data_dir/rustfs" --not_mandatory
+ynh_restore_file --origin_path="$data_dir/searxng" --not_mandatory
 
 ynh_script_progression --message="Repairing data permissions..." --weight=2
 prepare_data_dirs
