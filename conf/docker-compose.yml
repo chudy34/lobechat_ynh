@@ -134,7 +134,7 @@ services:
 
   # ── LobeHub ───────────────────────────────────────────────────────────────
   lobe:
-    image: lobehub/lobehub:2.2.17
+    image: lobehub/lobehub:2.2.18
     container_name: __APP__-lobe
     restart: always
     ports:
