@@ -42,6 +42,9 @@ jobs:
           python3 tools/check-images
           python3 tests/check_rustfs_init.py
 
+      - name: Exercise real Docker preflight without changing live files
+        run: sudo bash tests/check_preflight_real.sh
+
       - name: Start the full stack and exercise the image upgrade
         run: python3 tests/check_stack_upgrade.py --from-image "${{ steps.previous.outputs.image }}"
 

@@ -28,6 +28,8 @@ jobs:
       - name: Check RustFS client commands
         run: |
           docker run --rm --entrypoint /bin/sh rustfs/rc:v0.1.36 -c 'rc --version && rc anonymous set-json --help && rc mb --help'
+      - name: Exercise real Docker preflight without changing live files
+        run: sudo bash tests/check_preflight_real.sh
       - name: Initialize a disposable RustFS bucket
         run: python3 tests/check_rustfs_init.py
       - name: Start the full disposable stack
