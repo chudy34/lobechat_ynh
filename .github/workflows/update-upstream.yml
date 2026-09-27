@@ -7,6 +7,7 @@ on:
 
 permissions:
   contents: write
+  pull-requests: write
 
 concurrency:
   group: update-upstream
@@ -15,13 +16,37 @@ concurrency:
 jobs:
   update:
     runs-on: ubuntu-latest
+    timeout-minutes: 45
 
     steps:
       - name: Checkout package
         uses: actions/checkout@v4
 
+      - name: Record the currently packaged LobeHub image
+        id: previous
+        run: |
+          version="$(sed -nE 's/^version = "([^"~]+)~ynh[0-9]+"$/\1/p' manifest.toml)"
+          echo "image=lobehub/lobehub:${version}" >> "$GITHUB_OUTPUT"
+
       - name: Update pinned LobeHub release
         run: tools/update-upstream
+
+      - name: Validate package before publishing
+        run: |
+          bash -n scripts/* tools/update-upstream
+          python3 tests/check_compose.py
+          python3 tests/check_restore.py
+          bash tests/check_data_safety.sh
+          bash tests/check_preflight.sh
+          python3 tests/check_ports.py
+          python3 tools/check-images
+          python3 tests/check_rustfs_init.py
+
+      - name: Exercise real Docker preflight without changing live files
+        run: sudo bash tests/check_preflight_real.sh
+
+      - name: Start the full stack and exercise the image upgrade
+        run: python3 tests/check_stack_upgrade.py --from-image "${{ steps.previous.outputs.image }}"
 
       - name: Check for changes
         id: changes
@@ -32,12 +57,21 @@ jobs:
             echo "changed=true" >> "$GITHUB_OUTPUT"
           fi
 
-      - name: Commit and push update
+      - name: Open or update a pull request for a new release
         if: steps.changes.outputs.changed == 'true'
-        run: |
-          version="$(grep '^version = ' manifest.toml | sed 's/version = "\(.*\)~ynh1"/\1/')"
-          git config user.name "github-actions[bot]"
-          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
-          git add README.md conf/docker-compose.yml manifest.toml
-          git commit -m "Update LobeHub to ${version}"
-          git push
+        uses: peter-evans/create-pull-request@v8
+        with:
+          branch: automation/lobehub-upstream
+          add-paths: |
+            README.md
+            conf/docker-compose.yml
+            manifest.toml
+          commit-message: Update packaged LobeHub release
+          title: Update packaged LobeHub release
+          body: |
+            A new stable LobeHub release passed image, Compose, RustFS,
+            PostgreSQL preservation, and full-stack HTTP smoke checks.
+
+            Review the upstream release notes and test the YunoHost upgrade
+            on a staging instance before merging. This PR does not deploy to
+            the production VPS.

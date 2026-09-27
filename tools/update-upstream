@@ -17,15 +17,43 @@ process.stdin.on("end", () => {
 ')"
 fi
 
+if [[ ! "$tag" =~ ^v?[0-9]+\.[0-9]+\.[0-9]+$ ]]; then
+    echo "Unsupported LobeHub release tag: $tag" >&2
+    exit 1
+fi
+
 version="${tag#v}"
 image="lobehub/lobehub:$version"
+current_version="$(sed -nE 's/^version = "([^"~]+)~ynh[0-9]+"$/\1/p' manifest.toml)"
+if [[ -z "$current_version" ]]; then
+    echo "Cannot read the current YunoHost package version." >&2
+    exit 1
+fi
+
+if [[ "$current_version" == "$version" ]]; then
+    echo "Already packaging LobeHub $version; keeping the YunoHost package revision."
+    exit 0
+fi
 
 echo "Updating package to $repo release $tag..."
 
+# A GitHub release can appear before its Docker image is published. Do not
+# move the package to a tag that cannot be installed on either architecture.
+docker manifest inspect "$image" | python3 -c '
+import json, sys
+data = json.load(sys.stdin)
+platforms = {(m["platform"].get("os"), m["platform"].get("architecture")) for m in data.get("manifests", [])}
+required = {("linux", "amd64"), ("linux", "arm64")}
+if not required <= platforms:
+    sys.exit(f"{sorted(required - platforms)} missing from LobeHub image")
+'
+
 perl -0pi -e "s#version = \"[^\"]+\"#version = \"$version~ynh1\"#" manifest.toml
 perl -0pi -e "s#image: lobehub/lobehub:[^\\n]+#image: $image#" conf/docker-compose.yml
+perl -0pi -e "s#license_url = \"https://github.com/lobehub/lobehub/blob/[^\"]+/LICENSE\"#license_url = \"https://github.com/lobehub/lobehub/blob/$tag/LICENSE\"#" manifest.toml
 perl -0pi -e "s#Release: \`[^\`]+\`#Release: \`$tag\`#" README.md
 perl -0pi -e "s#Docker image: \`[^\`]+\`#Docker image: \`$image\`#" README.md
 perl -0pi -e "s#LobeHub version: \`[^\`]+\`#LobeHub version: \`$version\`#" README.md
+perl -0pi -e "s#(Licencja upstream: \[LobeHub Community License\]\(https://github.com/lobehub/lobehub/blob/)[^/]+(/LICENSE\))#\${1}$tag\${2}#" README.md
 
 echo "Updated to $repo@$tag ($image)."

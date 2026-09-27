@@ -90,9 +90,8 @@ services:
 
   # ── RustFS Init ───────────────────────────────────────────────────────────
   # One-shot: creates the lobe bucket with public-read policy, then exits.
-  # It must not block the main app from starting if RustFS policy commands vary.
   rustfs-init:
-    image: minio/mc:latest
+    image: rustfs/rc:v0.1.36
     container_name: __APP__-rustfs-init
     restart: "no"
     depends_on:
@@ -105,17 +104,18 @@ services:
       -c '
         set -u;
         for i in 1 2 3 4 5 6 7 8 9 10 11 12 13 14 15 16 17 18 19 20 21 22 23 24 25 26 27 28 29 30; do
-          if mc alias set rustfs "http://rustfs:9000" "${RUSTFS_ACCESS_KEY}" "${RUSTFS_SECRET_KEY}"; then
-            mc mb "rustfs/${RUSTFS_LOBE_BUCKET}" --ignore-existing || true;
-            mc anonymous set-json "/bucket.config.json" "rustfs/${RUSTFS_LOBE_BUCKET}" || true;
+          if rc alias set rustfs "http://rustfs:9000" "${RUSTFS_ACCESS_KEY}" "${RUSTFS_SECRET_KEY}" &&
+             rc mb "rustfs/${RUSTFS_LOBE_BUCKET}" --ignore-existing &&
+             rc anonymous set-json "/bucket.config.json" "rustfs/${RUSTFS_LOBE_BUCKET}" &&
+             printf "%s" "<CORSConfiguration><CORSRule><AllowedOrigin>*</AllowedOrigin><AllowedMethod>GET</AllowedMethod><AllowedMethod>PUT</AllowedMethod><AllowedMethod>HEAD</AllowedMethod><AllowedHeader>*</AllowedHeader><ExposeHeader>ETag</ExposeHeader><MaxAgeSeconds>3600</MaxAgeSeconds></CORSRule></CORSConfiguration>" | rc bucket cors set "rustfs/${RUSTFS_LOBE_BUCKET}" -; then
             echo "RustFS bucket ready.";
             exit 0;
           fi;
           echo "Waiting for RustFS S3 API...";
           sleep 4;
         done;
-        echo "RustFS bucket initialization skipped after timeout.";
-        exit 0
+        echo "RustFS bucket initialization failed after timeout.";
+        exit 1
       '
     networks:
       - lobe-network

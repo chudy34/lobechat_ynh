@@ -1,0 +1,36 @@
+name: Check YunoHost package
+
+on:
+  push:
+  pull_request:
+  workflow_dispatch:
+
+jobs:
+  check:
+    runs-on: ubuntu-latest
+    timeout-minutes: 45
+    steps:
+      - uses: actions/checkout@v4
+      - name: Check shell scripts
+        run: bash -n scripts/* tools/update-upstream
+      - name: Check Compose configuration
+        run: python3 tests/check_compose.py
+      - name: Check every packaged image and architecture
+        run: python3 tools/check-images
+      - name: Check PostgreSQL restore compatibility
+        run: python3 tests/check_restore.py
+      - name: Check existing database is preserved on install
+        run: bash tests/check_data_safety.sh
+      - name: Check install and upgrade preflight isolation
+        run: bash tests/check_preflight.sh
+      - name: Check installation port conflicts
+        run: python3 tests/check_ports.py
+      - name: Check RustFS client commands
+        run: |
+          docker run --rm --entrypoint /bin/sh rustfs/rc:v0.1.36 -c 'rc --version && rc anonymous set-json --help && rc mb --help'
+      - name: Exercise real Docker preflight without changing live files
+        run: sudo bash tests/check_preflight_real.sh
+      - name: Initialize a disposable RustFS bucket
+        run: python3 tests/check_rustfs_init.py
+      - name: Start the full disposable stack
+        run: python3 tests/check_stack_upgrade.py

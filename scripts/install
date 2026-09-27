@@ -9,6 +9,11 @@ source /usr/share/yunohost/helpers
 admin_email="$YNH_APP_ARG_ADMIN_EMAIL"
 admin_password="$YNH_APP_ARG_ADMIN_PASSWORD"
 
+# Abort before installing Docker or persisting settings if a previous failed
+# installation left data behind or one of the required host ports is occupied.
+check_postgres_data_dir_install
+check_install_ports_available
+
 #=================================================
 # INSTALL DOCKER CE (with Compose v2)
 #=================================================
@@ -28,6 +33,13 @@ auth_secret=$(gen_secret)
 searxng_secret=$(gen_secret)
 jwks_key=""
 
+build_app_url
+
+# Validate candidate configuration and download every image before creating
+# application files or starting any service.
+ynh_script_progression --message="Checking installation prerequisites and pulling images..." --weight=50
+preflight_package
+
 # Persist all secrets
 ynh_app_setting_set --app="$app" --key=postgres_password  --value="$postgres_password"
 ynh_app_setting_set --app="$app" --key=rustfs_access_key  --value="$rustfs_access_key"
@@ -43,9 +55,6 @@ ynh_app_setting_set --app="$app" --key=admin_password     --value="$admin_passwo
 #=================================================
 ynh_script_progression --message="Preparing data directories..." --weight=1
 prepare_data_dirs
-# On a fresh install, wipe any stale PostgreSQL data from a previous
-# failed attempt so initdb runs with the freshly generated password.
-clean_postgres_data_dir_install
 
 #=================================================
 # SEARXNG SETTINGS
@@ -60,11 +69,6 @@ ynh_script_progression --message="Preparing RustFS bucket policy..." --weight=1
 write_bucket_policy
 
 #=================================================
-# BUILD APP URL
-#=================================================
-build_app_url
-
-#=================================================
 # GENERATE .env
 #=================================================
 ynh_script_progression --message="Writing environment config..." --weight=1
@@ -77,13 +81,9 @@ ynh_script_progression --message="Deploying Docker Compose configuration..." --w
 write_compose_file
 
 #=================================================
-# PRE-PULL DOCKER IMAGES
+# PREPARE OIDC SIGNING KEY
 #=================================================
-ynh_script_progression --message="Pulling Docker images (this may take 5-10 minutes)..." --weight=50
-
 cd "$install_dir" || ynh_die "Unable to enter install directory: $install_dir"
-docker compose --project-name "$app" pull
-
 ynh_script_progression --message="Generating OIDC signing key..." --weight=1
 ensure_jwks_key
 write_env_file

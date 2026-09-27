@@ -1,0 +1,31 @@
+#!/usr/bin/env python3
+"""Fail if a packaged Docker image disappears or lacks a supported CPU target."""
+
+import json
+from pathlib import Path
+import re
+import subprocess
+import sys
+import tomllib
+
+
+root = Path(__file__).resolve().parents[1]
+manifest = tomllib.loads((root / "manifest.toml").read_text())
+required = {("linux", architecture) for architecture in manifest["integration"]["architectures"]}
+images = re.findall(r"^[ \t]+image:[ \t]+(\S+)", (root / "conf/docker-compose.yml").read_text(), re.M)
+if not images:
+    sys.exit("No Docker images found in Compose template")
+
+for image in images:
+    result = subprocess.run(["docker", "manifest", "inspect", image], text=True, capture_output=True)
+    if result.returncode:
+        sys.exit(f"Cannot pull {image}: {result.stderr.strip()}")
+    document = json.loads(result.stdout)
+    platforms = {
+        (entry["platform"].get("os"), entry["platform"].get("architecture"))
+        for entry in document.get("manifests", [])
+    }
+    missing = required - platforms
+    if missing:
+        sys.exit(f"{image} is missing required platforms: {sorted(missing)}")
+    print(f"OK {image}: {', '.join(sorted(architecture for _, architecture in required))}")
