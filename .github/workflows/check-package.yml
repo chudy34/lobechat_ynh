@@ -17,4 +17,6 @@ jobs:
       - name: Check PostgreSQL restore compatibility
         run: python3 tests/check_restore.py
       - name: Check RustFS client image availability
-        run: docker manifest inspect amazon/aws-cli:2.37.3 > /dev/null
+        run: |
+          docker manifest inspect allworldit/minio:latest > /dev/null
+          docker run --rm --entrypoint /bin/sh allworldit/minio:latest -c 'mc --version'

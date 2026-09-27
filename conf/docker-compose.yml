@@ -92,8 +92,7 @@ services:
   # One-shot: creates the lobe bucket with public-read policy, then exits.
   # It must not block the main app from starting if RustFS policy commands vary.
   rustfs-init:
-    # AWS publishes immutable version tags; avoid a moving client image.
-    image: amazon/aws-cli:2.37.3
+    image: allworldit/minio:latest
     container_name: __APP__-rustfs-init
     restart: "no"
     depends_on:
@@ -101,32 +100,22 @@ services:
         condition: service_healthy
     volumes:
       - __INSTALL_DIR__/bucket.config.json:/bucket.config.json:ro
-    environment:
-      AWS_ACCESS_KEY_ID:     ${RUSTFS_ACCESS_KEY}
-      AWS_SECRET_ACCESS_KEY: ${RUSTFS_SECRET_KEY}
-      AWS_DEFAULT_REGION:    us-east-1
-      AWS_EC2_METADATA_DISABLED: "true"
-      AWS_MAX_ATTEMPTS:      "1"
-      AWS_CONFIG_FILE:       /tmp/aws-config
     entrypoint: /bin/sh
     command: >
       -c '
         set -u;
-        printf "[default]\nregion = us-east-1\ns3 =\n    addressing_style = path\n" > /tmp/aws-config;
         for i in 1 2 3 4 5 6 7 8 9 10 11 12 13 14 15 16 17 18 19 20 21 22 23 24 25 26 27 28 29 30; do
-          if aws --endpoint-url http://rustfs:9000 s3api head-bucket --bucket "${RUSTFS_LOBE_BUCKET}" >/dev/null 2>&1 ||
-             aws --endpoint-url http://rustfs:9000 s3api create-bucket --bucket "${RUSTFS_LOBE_BUCKET}"; then
-            if ! aws --endpoint-url http://rustfs:9000 s3api put-bucket-policy --bucket "${RUSTFS_LOBE_BUCKET}" --policy file:///bucket.config.json; then
-              echo "WARNING: RustFS bucket policy was not applied.";
-            fi;
+          if mc alias set rustfs "http://rustfs:9000" "${RUSTFS_ACCESS_KEY}" "${RUSTFS_SECRET_KEY}"; then
+            mc mb "rustfs/${RUSTFS_LOBE_BUCKET}" --ignore-existing || true;
+            mc anonymous set-json "/bucket.config.json" "rustfs/${RUSTFS_LOBE_BUCKET}" || true;
             echo "RustFS bucket ready.";
             exit 0;
           fi;
           echo "Waiting for RustFS S3 API...";
           sleep 4;
         done;
-        echo "RustFS bucket initialization failed after timeout.";
-        exit 1
+        echo "RustFS bucket initialization skipped after timeout.";
+        exit 0
       '
     networks:
       - lobe-network

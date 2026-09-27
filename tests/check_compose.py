@@ -50,10 +50,11 @@ with tempfile.TemporaryDirectory() as directory:
     )
     services = json.loads(result.stdout)["services"]
     assert services["lobe"]["image"] == f"lobehub/lobehub:{VERSION}"
-    assert services["rustfs-init"]["image"] == "amazon/aws-cli:2.37.3"
+    assert services["rustfs-init"]["image"] == "allworldit/minio:latest"
     assert services["rustfs-init"]["networks"] == services["rustfs"]["networks"]
     assert services["rustfs-init"]["depends_on"]["rustfs"]["condition"] == "service_healthy"
     assert services["lobe"]["depends_on"]["rustfs-init"]["condition"] == "service_completed_successfully"
     assert "minio/mc" not in result.stdout
+    assert "amazon/aws-cli" not in result.stdout
 
 print("Compose configuration and RustFS initialization dependencies are valid")
