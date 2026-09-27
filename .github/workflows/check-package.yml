@@ -18,5 +18,5 @@ jobs:
         run: python3 tests/check_restore.py
       - name: Check RustFS client image availability
         run: |
-          docker manifest inspect allworldit/minio:latest > /dev/null
-          docker run --rm --entrypoint /bin/sh allworldit/minio:latest -c 'mc --version'
+          docker manifest inspect allworldit/minio@sha256:164a8866db96dec84c35262db5e038f3010a986d301114f71123b763b3c8b39c > /dev/null
+          docker run --rm --entrypoint /bin/sh allworldit/minio@sha256:164a8866db96dec84c35262db5e038f3010a986d301114f71123b763b3c8b39c -c 'mc --version'
