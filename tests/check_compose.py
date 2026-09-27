@@ -50,7 +50,7 @@ with tempfile.TemporaryDirectory() as directory:
     )
     services = json.loads(result.stdout)["services"]
     assert services["lobe"]["image"] == f"lobehub/lobehub:{VERSION}"
-    assert services["rustfs-init"]["image"] == "allworldit/minio@sha256:164a8866db96dec84c35262db5e038f3010a986d301114f71123b763b3c8b39c"
+    assert services["rustfs-init"]["image"] == "rustfs/rc:v0.1.36"
     assert services["rustfs-init"]["networks"] == services["rustfs"]["networks"]
     assert services["rustfs-init"]["depends_on"]["rustfs"]["condition"] == "service_healthy"
     assert services["lobe"]["depends_on"]["rustfs-init"]["condition"] == "service_completed_successfully"
