@@ -14,7 +14,7 @@ ExecStartPre=/bin/bash -c 'docker info >/dev/null 2>&1 || systemctl start docker
 ExecStart=docker compose \
     --project-name __APP__ \
     --file __INSTALL_DIR__/docker-compose.yml \
-    up -d --remove-orphans
+    up -d
 
 ExecStop=docker compose \
     --project-name __APP__ \
@@ -24,7 +24,7 @@ ExecStop=docker compose \
 ExecReload=docker compose \
     --project-name __APP__ \
     --file __INSTALL_DIR__/docker-compose.yml \
-    up -d --remove-orphans
+    up -d
 
 # NOTE: Restart=on-failure is intentionally omitted — with Type=oneshot it
 # causes systemd to respawn the unit when docker compose exits non-zero, but

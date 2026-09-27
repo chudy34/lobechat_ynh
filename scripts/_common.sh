@@ -140,12 +140,7 @@ ENV_EOF
 }
 
 write_bucket_policy() {
-    # NOTE: mc (MinIO client, used by rustfs-init) validates the policy
-    # schema and rejects the upstream LobeHub bucket.config.json because
-    # it uses "ID" (uppercase). mc expects "Id" (camelCase) per the AWS
-    # S3 policy spec. Without this fix rustfs-init fails with:
-    #   parse policy failed Error("unknown field `ID`, expected one of
-    #   `Id`, `Version`, `Statement`", line: 2, column: 6)
+    # RustFS accepts the AWS S3 policy schema with "Id" (camelCase).
     cat > "$install_dir/bucket.config.json" << 'BUCKET_EOF'
 {
   "Id": "",
@@ -239,6 +234,14 @@ wait_for_lobehub() {
             lobe_state=$(docker inspect --format='{{.State.Status}}' "${app}-lobe" 2>/dev/null || echo "missing")
             local pg_state
             pg_state=$(docker inspect --format='{{.State.Status}}' "${app}-postgres" 2>/dev/null || echo "missing")
+            local rustfs_init_result
+            rustfs_init_result=$(docker inspect --format='{{.State.Status}}:{{.State.ExitCode}}' "${app}-rustfs-init" 2>/dev/null || true)
+
+            if [ -n "$rustfs_init_result" ] && [ "$rustfs_init_result" != "exited:0" ] &&
+               [[ "$rustfs_init_result" == exited:* ]]; then
+                ynh_print_warn "rustfs-init failed ($rustfs_init_result) after ${elapsed}s — aborting wait early."
+                break
+            fi
 
             # If lobe is restarting in a loop or has exited, it will never
             # become ready on its own — collect diagnostics and bail.
@@ -318,7 +321,9 @@ cleanup_docker_images() {
 
     if [ -f "$install_dir/docker-compose.yml" ]; then
         cd "$install_dir" || return 1
-        docker compose --project-name "$project" down --remove-orphans --volumes --timeout 30 || true
+        # A separately managed gateway can share this Compose project. Do not
+        # remove orphan containers or volumes during YunoHost rollback/removal.
+        docker compose --project-name "$project" down --timeout 30 || true
         docker compose --project-name "$project" rm -f || true
         # Remove images referenced in the compose file
         docker images --filter "reference=lobehub/lobehub*" --format '{{.Repository}}:{{.Tag}}' | while read -r img; do
@@ -333,13 +338,9 @@ cleanup_docker_images() {
         docker images --filter "reference=rustfs/rustfs*" --format '{{.Repository}}:{{.Tag}}' | while read -r img; do
             docker rmi "$img" 2>/dev/null || true
         done
-        docker images --filter "reference=minio/mc*" --format '{{.Repository}}:{{.Tag}}' | while read -r img; do
-            docker rmi "$img" 2>/dev/null || true
-        done
         docker images --filter "reference=searxng/searxng*" --format '{{.Repository}}:{{.Tag}}' | while read -r img; do
             docker rmi "$img" 2>/dev/null || true
         done
-        docker image prune -f 2>/dev/null || true
     fi
 }
 
@@ -376,7 +377,41 @@ restore_postgres() {
     fi
 
     ynh_print_info "Restoring PostgreSQL database from dump..."
-    docker compose --project-name "$app" --file "$install_dir/docker-compose.yml" \
-        exec -T postgresql psql -v ON_ERROR_STOP=1 -U postgres -d "$LOBE_DB_NAME" \
-        < "$dump_file"
+    # pg_dump from older ParadeDB releases can place pg_search before vector
+    # in CREATE order, and vector before pg_search in DROP order. Current
+    # pg_search requires vector, so normalize those two extension statements
+    # while streaming the dump without changing the saved backup.
+    (
+        set -o pipefail
+        awk '
+            {
+                if (pending_vector_drop) {
+                    if ($0 == "DROP EXTENSION IF EXISTS pg_search;") {
+                        print
+                        print "DROP EXTENSION IF EXISTS vector;"
+                        pending_vector_drop = 0
+                        next
+                    }
+                    print "DROP EXTENSION IF EXISTS vector;"
+                    pending_vector_drop = 0
+                }
+                if ($0 == "DROP EXTENSION IF EXISTS vector;") {
+                    pending_vector_drop = 1
+                    next
+                }
+                if ($0 == "CREATE EXTENSION IF NOT EXISTS vector WITH SCHEMA public;") {
+                    vector_created = 1
+                }
+                if ($0 == "CREATE EXTENSION IF NOT EXISTS pg_search WITH SCHEMA paradedb;" && !vector_created) {
+                    print "CREATE EXTENSION IF NOT EXISTS vector WITH SCHEMA public;"
+                    vector_created = 1
+                }
+                print
+            }
+            END {
+                if (pending_vector_drop) print "DROP EXTENSION IF EXISTS vector;"
+            }
+        ' "$dump_file" | docker compose --project-name "$app" --file "$install_dir/docker-compose.yml" \
+            exec -T postgresql psql -v ON_ERROR_STOP=1 -U postgres -d "$LOBE_DB_NAME"
+    )
 }

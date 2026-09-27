@@ -19,6 +19,12 @@ fi
 
 version="${tag#v}"
 image="lobehub/lobehub:$version"
+current_version="$(sed -nE 's/^version = "([^"~]+)~ynh[0-9]+"$/\1/p' manifest.toml)"
+
+if [[ "$current_version" == "$version" ]]; then
+    echo "Already packaging LobeHub $version; keeping the YunoHost package revision."
+    exit 0
+fi
 
 echo "Updating package to $repo release $tag..."
 

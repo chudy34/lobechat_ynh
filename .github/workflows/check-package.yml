@@ -1,0 +1,20 @@
+name: Check YunoHost package
+
+on:
+  push:
+  pull_request:
+  workflow_dispatch:
+
+jobs:
+  check:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Check shell scripts
+        run: bash -n scripts/* tools/update-upstream
+      - name: Check Compose configuration
+        run: python3 tests/check_compose.py
+      - name: Check PostgreSQL restore compatibility
+        run: python3 tests/check_restore.py
+      - name: Check RustFS client image availability
+        run: docker manifest inspect amazon/aws-cli:2.37.3 > /dev/null

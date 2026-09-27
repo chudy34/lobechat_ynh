@@ -35,7 +35,7 @@ jobs:
       - name: Commit and push update
         if: steps.changes.outputs.changed == 'true'
         run: |
-          version="$(grep '^version = ' manifest.toml | sed 's/version = "\(.*\)~ynh1"/\1/')"
+          version="$(sed -nE 's/^version = "([^"~]+)~ynh[0-9]+"$/\1/p' manifest.toml)"
           git config user.name "github-actions[bot]"
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
           git add README.md conf/docker-compose.yml manifest.toml
