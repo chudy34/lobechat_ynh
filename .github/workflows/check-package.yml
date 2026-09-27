@@ -8,6 +8,7 @@ on:
 jobs:
   check:
     runs-on: ubuntu-latest
+    timeout-minutes: 45
     steps:
       - uses: actions/checkout@v4
       - name: Check shell scripts
@@ -25,3 +26,5 @@ jobs:
           docker run --rm --entrypoint /bin/sh rustfs/rc:v0.1.36 -c 'rc --version && rc anonymous set-json --help && rc mb --help'
       - name: Initialize a disposable RustFS bucket
         run: python3 tests/check_rustfs_init.py
+      - name: Start the full disposable stack
+        run: python3 tests/check_stack_upgrade.py

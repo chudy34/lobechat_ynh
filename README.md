@@ -85,7 +85,7 @@ Do korzystania z wybranego dostawcy modeli może być potrzebny jego klucz API. 
 
 Pakiet uruchamia oficjalny obraz Docker LobeHub w wersji zapisanej w `conf/docker-compose.yml`. Pliki specyficzne dla YunoHost, w tym skrypty instalacji, aktualizacji, kopii i przywracania, są utrzymywane tutaj. Nie są automatycznie zastępowane plikami z projektu głównego.
 
-Workflow [Update LobeHub upstream](.github/workflows/update-upstream.yml) sprawdza codziennie najnowsze stabilne wydanie LobeHub. Gdy ukaże się nowa wersja, `tools/update-upstream` aktualizuje numer pakietu, tag obrazu i informacje o wydaniu w tym README. Przed zapisaniem zmiany workflow sprawdza konfigurację Compose, przywracanie SQL oraz dostępność wszystkich obrazów na `amd64` i `arm64`. Jeśli kontrola nie przejdzie, aktualizacja nie jest publikowana.
+Workflow [Update LobeHub upstream](.github/workflows/update-upstream.yml) sprawdza codziennie najnowsze stabilne wydanie LobeHub. Gdy ukaże się nowa wersja, `tools/update-upstream` aktualizuje numer pakietu, tag obrazu i informacje o wydaniu w tym README. Workflow sprawdza konfigurację Compose, przywracanie SQL, dostępność wszystkich obrazów na `amd64` i `arm64` oraz uruchamia pełny stos z testową bazą. Przy nowej wersji sprawdza też start poprzedniego obrazu, przełączenie na nowy obraz i zachowanie danych kontrolnych w PostgreSQL. Jeśli testy przejdą, powstaje PR do oceny; cron nie zapisuje już nowej wersji bezpośrednio w głównej gałęzi.
 
 Aktualizację można też przygotować ręcznie:
 
@@ -93,7 +93,7 @@ Aktualizację można też przygotować ręcznie:
 tools/update-upstream
 ```
 
-Zmiany działania aplikacji w nowym wydaniu upstream mogą wymagać osobnej adaptacji pakietu YunoHost. Wynik automatycznych kontroli nie zastępuje próby aktualizacji na instancji testowej przed wdrożeniem na serwerze z danymi.
+Zmiany działania aplikacji w nowym wydaniu upstream mogą wymagać osobnej adaptacji pakietu YunoHost. Test GitHub Actions używa testowych danych i kontenerów; nie uruchamia pełnych poleceń YunoHost w maszynie wirtualnej. Wynik automatycznych kontroli nie zastępuje próby aktualizacji na instancji testowej przed wdrożeniem na serwerze z danymi.
 
 ## Odnośniki do projektu głównego
 
