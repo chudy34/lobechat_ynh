@@ -67,13 +67,6 @@ if [ -z "$searxng_secret" ]; then
 fi
 
 #=================================================
-
-# STOP SERVICE
-#=================================================
-ynh_script_progression --message="Stopping LobeHub..." --weight=2
-ynh_systemd_action --service_name="$app" --action="stop" --log_path=systemd --timeout=60 || true
-
-#=================================================
 # ENSURE DOCKER CE IS INSTALLED
 #=================================================
 ynh_script_progression --message="Checking Docker CE..." --weight=5
@@ -110,6 +103,11 @@ ynh_script_progression --message="Pulling latest Docker images..." --weight=40
 
 cd "$install_dir" || ynh_die "Unable to enter install directory: $install_dir"
 docker compose --project-name "$app" pull
+
+# Keep the existing containers running if any image is unavailable. Only
+# stop the stack after every image for the new release has been pulled.
+ynh_script_progression --message="Stopping LobeHub for the update..." --weight=2
+ynh_systemd_action --service_name="$app" --action="stop" --log_path=systemd --timeout=60
 
 ynh_script_progression --message="Configuring OIDC signing key..." --weight=1
 ensure_jwks_key

@@ -23,6 +23,15 @@ jobs:
       - name: Update pinned LobeHub release
         run: tools/update-upstream
 
+      - name: Validate package before publishing
+        run: |
+          bash -n scripts/* tools/update-upstream
+          python3 tests/check_compose.py
+          python3 tests/check_restore.py
+          bash tests/check_data_safety.sh
+          python3 tools/check-images
+          python3 tests/check_rustfs_init.py
+
       - name: Check for changes
         id: changes
         run: |

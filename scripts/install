@@ -43,9 +43,8 @@ ynh_app_setting_set --app="$app" --key=admin_password     --value="$admin_passwo
 #=================================================
 ynh_script_progression --message="Preparing data directories..." --weight=1
 prepare_data_dirs
-# On a fresh install, wipe any stale PostgreSQL data from a previous
-# failed attempt so initdb runs with the freshly generated password.
-clean_postgres_data_dir_install
+# A previous failed install or restore may have left valuable data behind.
+check_postgres_data_dir_install
 
 #=================================================
 # SEARXNG SETTINGS

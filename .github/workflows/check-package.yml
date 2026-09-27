@@ -14,9 +14,14 @@ jobs:
         run: bash -n scripts/* tools/update-upstream
       - name: Check Compose configuration
         run: python3 tests/check_compose.py
+      - name: Check every packaged image and architecture
+        run: python3 tools/check-images
       - name: Check PostgreSQL restore compatibility
         run: python3 tests/check_restore.py
-      - name: Check RustFS client image availability
+      - name: Check existing database is preserved on install
+        run: bash tests/check_data_safety.sh
+      - name: Check RustFS client commands
         run: |
-          docker manifest inspect rustfs/rc:v0.1.36 | python3 -c 'import json,sys; platforms={(m["platform"]["os"],m["platform"]["architecture"]) for m in json.load(sys.stdin)["manifests"]}; assert {("linux","amd64"),("linux","arm64")} <= platforms'
           docker run --rm --entrypoint /bin/sh rustfs/rc:v0.1.36 -c 'rc --version && rc anonymous set-json --help && rc mb --help'
+      - name: Initialize a disposable RustFS bucket
+        run: python3 tests/check_rustfs_init.py

@@ -12,7 +12,8 @@ version = "2.2.18~ynh2"
 maintainers = ["chudy34"]
 
 [upstream]
-license    = "MIT"
+license    = "LobeHub Community License"
+license_url = "https://github.com/lobehub/lobehub/blob/v2.2.18/LICENSE"
 website    = "https://lobehub.com"
 admindoc   = "https://lobehub.com/docs/self-hosting/platform/docker-compose"
 userdoc    = "https://lobehub.com/docs"

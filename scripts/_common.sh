@@ -88,20 +88,11 @@ prepare_data_dirs() {
     chmod 750 "$data_dir/rustfs"
 }
 
-# Install-only helper: on a fresh install there is no user data to
-# preserve, so wipe any pre-existing PostgreSQL data directory so initdb
-# runs with the freshly generated POSTGRES_PASSWORD. Without this, a
-# previous failed install attempt leaves a data directory initialised
-# with a different password and the new install hits 28P01.
-clean_postgres_data_dir_install() {
+# Never overwrite a database left by a failed install or restore.
+check_postgres_data_dir_install() {
     local pg_dir="$data_dir/postgres"
     if [ -d "$pg_dir" ] && [ -n "$(ls -A "$pg_dir" 2>/dev/null)" ]; then
-        ynh_print_warn "Found existing PostgreSQL data from a previous attempt — wiping so initdb uses the current password."
-        systemctl stop "$app" 2>/dev/null || true
-        docker compose --project-name "$app" --file "$install_dir/docker-compose.yml" down --timeout 30 2>/dev/null || true
-        rm -rf -- "${pg_dir:?}/"*
-        chown -R 999:999 "$pg_dir"
-        chmod 700 "$pg_dir"
+        ynh_die "Existing PostgreSQL data found in $pg_dir. Installation stopped to preserve it; restore or move it explicitly before retrying."
     fi
 }
 
