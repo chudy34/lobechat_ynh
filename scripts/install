@@ -9,6 +9,11 @@ source /usr/share/yunohost/helpers
 admin_email="$YNH_APP_ARG_ADMIN_EMAIL"
 admin_password="$YNH_APP_ARG_ADMIN_PASSWORD"
 
+# Abort before installing Docker or persisting settings if a previous failed
+# installation left data behind or one of the required host ports is occupied.
+check_postgres_data_dir_install
+check_install_ports_available
+
 #=================================================
 # INSTALL DOCKER CE (with Compose v2)
 #=================================================
@@ -28,8 +33,6 @@ auth_secret=$(gen_secret)
 searxng_secret=$(gen_secret)
 jwks_key=""
 
-# A previous failed install or restore may have left valuable data behind.
-check_postgres_data_dir_install
 build_app_url
 
 # Validate candidate configuration and download every image before creating

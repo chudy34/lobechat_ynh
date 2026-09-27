@@ -96,6 +96,25 @@ check_postgres_data_dir_install() {
     fi
 }
 
+check_install_ports_available() {
+    python3 - "$port" "$port_rustfs_api" "$port_rustfs_console" <<'PY' || ynh_die "One or more LobeHub ports are unavailable; installation stopped before starting containers."
+import socket
+import sys
+
+ports = [int(value) for value in sys.argv[1:]]
+if len(set(ports)) != len(ports):
+    sys.exit("LobeHub ports must be distinct")
+for port in ports:
+    if not 1 <= port <= 65535:
+        sys.exit(f"Invalid LobeHub port: {port}")
+    with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as probe:
+        try:
+            probe.bind(("127.0.0.1", port))
+        except OSError as error:
+            sys.exit(f"Port 127.0.0.1:{port} is unavailable: {error}")
+PY
+}
+
 write_env_file() {
     local env_file="${1:-$install_dir/.env}"
     cat > "$env_file" << ENV_EOF

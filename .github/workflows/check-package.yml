@@ -23,6 +23,8 @@ jobs:
         run: bash tests/check_data_safety.sh
       - name: Check install and upgrade preflight isolation
         run: bash tests/check_preflight.sh
+      - name: Check installation port conflicts
+        run: python3 tests/check_ports.py
       - name: Check RustFS client commands
         run: |
           docker run --rm --entrypoint /bin/sh rustfs/rc:v0.1.36 -c 'rc --version && rc anonymous set-json --help && rc mb --help'
