@@ -12,10 +12,7 @@ app = "lobehub-ci"
 
 with tempfile.TemporaryDirectory() as directory:
     workspace = Path(directory)
-    rustfs_data = workspace / "rustfs"
-    rustfs_data.mkdir()
     workspace.chmod(0o755)
-    rustfs_data.chmod(0o777)
 
     helper = (root / "scripts/_common.sh").read_text()
     policy = helper.split("<< 'BUCKET_EOF'\n", 1)[1].split("\nBUCKET_EOF", 1)[0]
@@ -31,6 +28,10 @@ with tempfile.TemporaryDirectory() as directory:
         "__PORT_RUSTFS_CONSOLE__": "29001",
     }.items():
         compose = compose.replace(source, replacement)
+    # Keep database files inside a disposable Docker volume. RustFS writes
+    # files as its own UID, which the CI runner cannot remove from /tmp.
+    compose = compose.replace(f"- {directory}/rustfs:/data", "- rustfs-test-data:/data")
+    compose += "\nvolumes:\n  rustfs-test-data:\n"
     compose_file = workspace / "docker-compose.yml"
     compose_file.write_text(compose)
 
