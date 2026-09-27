@@ -37,6 +37,7 @@ jobs:
           python3 tests/check_compose.py
           python3 tests/check_restore.py
           bash tests/check_data_safety.sh
+          bash tests/check_preflight.sh
           python3 tools/check-images
           python3 tests/check_rustfs_init.py
 

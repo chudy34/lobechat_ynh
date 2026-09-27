@@ -13,6 +13,8 @@ sudo yunohost app upgrade lobehub -u https://github.com/chudy34/lobechat_ynh
 
 Przed aktualizacją instancji z danymi wykonaj kopię zapasową YunoHost i sprawdź, czy można ją odczytać. Pakiet korzysta z Docker CE i Compose v2. Instalator przygotowuje także PostgreSQL/ParadeDB, RustFS, Redis oraz SearXNG. Ustawienia i dane pozostają na serwerze YunoHost; to repozytorium zawiera tylko pliki pakietu.
 
+Skrypty instalacji i aktualizacji najpierw sprawdzają tymczasową konfigurację Compose, pobierają wszystkie wymagane obrazy oraz sprawdzają polecenia potrzebne do uruchomienia. Jeśli ten etap się nie powiedzie, aktualizacja nie zatrzymuje działającej aplikacji ani nie zastępuje jej konfiguracji. Kontrola wstępna nie przewidzi błędów migracji bazy lub działania aplikacji po starcie; po uruchomieniu skrypt czeka na odpowiedź LobeHub i zgłasza błąd, jeśli jej nie otrzyma.
+
 ### Co instaluje ten pakiet
 
 | Składnik | Rola |

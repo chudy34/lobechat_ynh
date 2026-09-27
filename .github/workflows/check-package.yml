@@ -21,6 +21,8 @@ jobs:
         run: python3 tests/check_restore.py
       - name: Check existing database is preserved on install
         run: bash tests/check_data_safety.sh
+      - name: Check install and upgrade preflight isolation
+        run: bash tests/check_preflight.sh
       - name: Check RustFS client commands
         run: |
           docker run --rm --entrypoint /bin/sh rustfs/rc:v0.1.36 -c 'rc --version && rc anonymous set-json --help && rc mb --help'

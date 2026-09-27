@@ -77,6 +77,11 @@ install_docker_ce
 #=================================================
 build_app_url
 
+# Check the candidate on temporary files while the current configuration and
+# containers are still intact. A failed pull must not change the live Compose.
+ynh_script_progression --message="Checking upgrade prerequisites and pulling images..." --weight=40
+preflight_package
+
 ynh_script_progression --message="Preparing data directories..." --weight=1
 prepare_data_dirs
 
@@ -97,20 +102,16 @@ ynh_script_progression --message="Updating Docker Compose configuration..." --we
 write_compose_file
 
 #=================================================
-# PULL LATEST IMAGES
+# STOP CURRENT STACK
 #=================================================
-ynh_script_progression --message="Pulling latest Docker images..." --weight=40
-
 cd "$install_dir" || ynh_die "Unable to enter install directory: $install_dir"
-docker compose --project-name "$app" pull
-
-# Keep the existing containers running if any image is unavailable. Only
-# stop the stack after every image for the new release has been pulled.
-ynh_script_progression --message="Stopping LobeHub for the update..." --weight=2
-ynh_systemd_action --service_name="$app" --action="stop" --log_path=systemd --timeout=60
 
 ynh_script_progression --message="Configuring OIDC signing key..." --weight=1
 ensure_jwks_key
+
+# Required images and signing-key generation have passed before downtime.
+ynh_script_progression --message="Stopping LobeHub for the update..." --weight=2
+ynh_systemd_action --service_name="$app" --action="stop" --log_path=systemd --timeout=60
 
 ynh_script_progression --message="Updating environment config..." --weight=1
 write_env_file
