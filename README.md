@@ -48,10 +48,10 @@ Grafiki w dalszej części pochodzą z [README projektu LobeHub](https://github.
 ## Aktualna wersja upstream
 
 - Repository: `https://github.com/lobehub/lobehub`
-- Release: `v2.2.18`
-- Docker image: `lobehub/lobehub:2.2.18`
-- LobeHub version: `2.2.18`
-- Licencja upstream: [LobeHub Community License](https://github.com/lobehub/lobehub/blob/v2.2.18/LICENSE)
+- Release: `v2.3.0`
+- Docker image: `lobehub/lobehub:2.3.0`
+- LobeHub version: `2.3.0`
+- Licencja upstream: [LobeHub Community License](https://github.com/lobehub/lobehub/blob/v2.3.0/LICENSE)
 
 ## ✨ Funkcje LobeHub
 
